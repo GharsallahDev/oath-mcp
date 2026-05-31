@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "ez.evtxecmd": {
+      "version": "1.5.0.0",
+      "commands": ["EvtxECmd"]
+    },
+    "ez.mftecmd": {
+      "version": "1.2.2.0",
+      "commands": ["MFTECmd"]
+    },
+    "ez.amcacheparser": {
+      "version": "2.0.0.1",
+      "commands": ["AmcacheParser"]
+    },
+    "ez.pecmd": {
+      "version": "1.5.0.0",
+      "commands": ["PECmd"]
+    },
+    "ez.srumecmd": {
+      "version": "1.5.0.0",
+      "commands": ["SrumECmd"]
+    },
+    "ez.recmd": {
+      "version": "2.0.0.0",
+      "commands": ["RECmd"]
+    },
+    "ez.sbecmd": {
+      "version": "2.0.0.0",
+      "commands": ["SBECmd"]
+    },
+    "ez.jlecmd": {
+      "version": "1.5.0.0",
+      "commands": ["JLECmd"]
+    },
+    "ez.lecmd": {
+      "version": "1.5.0.0",
+      "commands": ["LECmd"]
+    },
+    "ez.wxtcmd": {
+      "version": "1.0.0.0",
+      "commands": ["WxTCmd"]
+    }
+  }
+}
