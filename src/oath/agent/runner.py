@@ -64,9 +64,10 @@ class HypothesisSpec:
 
     Why hypothesis-driven (vs free-form):
       - Bounds the agent's search space (cheaper, faster, more focused)
-      - Makes the demo narratable ("we asked: is this PtH? Answer: yes,
+      - Makes the result narratable ("we asked: is this PtH? Answer: yes,
         here are 3 receipts.")
-      - Maps cleanly to MITRE ATT&CK techniques (every panel judge speaks this)
+      - Maps cleanly to MITRE ATT&CK techniques (every IR practitioner
+        speaks this)
       - Each hypothesis has a clean PASS/QUARANTINE/GAVE-UP verdict
     """
 

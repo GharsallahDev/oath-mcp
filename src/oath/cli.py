@@ -42,7 +42,7 @@ def mount(image: str, out: str) -> None:
     and a Notarized signature that downstream tool invocations bind to.
     """
     click.echo(f"[oath mount] {image}  →  {out}")
-    click.echo("(not yet implemented — Day 1-3 milestone)", err=True)
+    click.echo("(not yet implemented)", err=True)
     sys.exit(2)
 
 
@@ -63,7 +63,7 @@ def triage(hypothesis: tuple[str, ...], handle: str) -> None:
       5. Ships findings as Replay Receipts (one-line verifier commands).
     """
     click.echo(f"[oath triage] handle={handle}  hypotheses={list(hypothesis) or 'auto'}")
-    click.echo("(not yet implemented — Day 1-9 milestone)", err=True)
+    click.echo("(not yet implemented)", err=True)
     sys.exit(2)
 
 
@@ -81,10 +81,10 @@ def verify(finding_id: str, receipt_dir: str) -> None:
     recomputes the BLAKE3 hash of the output, and compares it to the signed
     receipt. Outputs PASS / FAIL with the supporting evidence span on PASS.
 
-    Designed to run on a judge's commodity laptop in under 60 seconds.
+    Designed to run on any analyst's commodity laptop in under 60 seconds.
     """
     click.echo(f"[oath verify] finding={finding_id}  receipts={receipt_dir}")
-    click.echo("(not yet implemented — Day 12-14 milestone)", err=True)
+    click.echo("(not yet implemented)", err=True)
     sys.exit(2)
 
 
@@ -103,7 +103,7 @@ def benchmark(module: str, corpus: str, publish: bool) -> None:
     click.echo(
         f"[oath benchmark] module={module}  corpus={corpus}  publish={publish}"
     )
-    click.echo("(not yet implemented — Day 8-10 milestone)", err=True)
+    click.echo("(not yet implemented)", err=True)
     sys.exit(2)
 
 
@@ -116,7 +116,7 @@ def serve(transport: str, port: int) -> None:
     Exposes 12 typed forensic functions, each returning Notarized<T>.
     """
     click.echo(f"[oath serve] transport={transport}  port={port}")
-    click.echo("(not yet implemented — Day 1-3 milestone)", err=True)
+    click.echo("(not yet implemented)", err=True)
     sys.exit(2)
 
 

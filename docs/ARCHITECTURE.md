@@ -2,7 +2,7 @@
 
 ## One-paragraph summary
 
-OATH is an autonomous DFIR agent built on the SANS SIFT Workstation. Its architecture is organized around a single invariant: **no claim leaves the agent unless it can be re-derived from the original-image SHA-256 by a deterministic, non-LLM verifier.** The LLM proposes; the verifier disposes. When the verifier fails, the agent visibly self-corrects (the Ralph Wiggum Loop) and re-attempts. Every shipped finding carries a Replay Receipt — a one-line command that re-runs the supporting tool invocation on the original image and produces matching output. Hallucinations are not suppressed but quarantined and shown to the examiner as "the agent suspected this but could not prove it." OATH ships with a public score on the NIST CFTT Module III practical-analysis corpus (DFIR-Metric) and a `verify.sh` one-liner so any judge can re-run a benchmark case on their laptop in under sixty seconds.
+OATH is an autonomous DFIR agent built on the SIFT Workstation. Its architecture is organized around a single invariant: **no claim leaves the agent unless it can be re-derived from the original-image SHA-256 by a deterministic, non-LLM verifier.** The LLM proposes; the verifier disposes. When the verifier fails, the agent visibly self-corrects (the Ralph Wiggum Loop) and re-attempts. Every shipped finding carries a Replay Receipt — a one-line command that re-runs the supporting tool invocation on the original image and produces matching output. Hallucinations are not suppressed but quarantined and shown to the examiner as "the agent suspected this but could not prove it." OATH ships with a public score on the NIST CFTT Module III practical-analysis corpus (DFIR-Metric) and a `verify.sh` one-liner so any examiner can re-run a benchmark case on their laptop in under sixty seconds.
 
 ## Component diagram
 
@@ -58,7 +58,7 @@ OATH is an autonomous DFIR agent built on the SANS SIFT Workstation. Its archite
 │  Deterministic     │  │  Wrong hypothesis →    │  │  oath verify <id>        │
 │  re-derivation     │  │  narrated abandonment  │  │  → reproduces evidence   │
 │  via regex /       │  │  → constrained re-     │  │  from original SHA-256   │
-│  YARA / struct-    │  │  proposal              │  │  in seconds, on judge's  │
+│  YARA / struct-    │  │  proposal              │  │  in seconds, on examiner's  │
 │  parse from        │  │                        │  │  laptop                  │
 │  original SHA-256  │  │                        │  │                          │
 └────────────────────┘  └────────────────────────┘  └──────────────────────────┘
@@ -113,16 +113,6 @@ OATH is scored on the NIST CFTT Module III practical-analysis subset (the [DFIR-
 
 ## What OATH explicitly does NOT claim
 
-- **Not** "first to X" anything. The competitive landscape has shipped: SHA-256 evidence sealing (sgharlow), typed evidence graphs (glaive), bidirectional reasoning (nighteye), 0-FP real cases (REAGENT). OATH claims the *integration*: deterministic verifier + visible self-correction + portable replay + public benchmark dominance, end-to-end, in a single MIT-licensed repo.
-- **Not** Daubert-certified. The architecture is Daubert-shaped (examiner-reviewable, hash-anchored, methodologically reproducible) but admissibility is a judicial finding, not a property of code. See [`docs/ACCURACY.md`](ACCURACY.md) §6.
-- **Not** a synthetic-examiner-avatar video. The demo is live terminal screencast per Rob Lee's stated preference; no AI-generated faces speaking forensic conclusions.
-
-## Whitespace OATH occupies vs the visible field
-
-| Competitor | Their thing | What OATH adds |
-|---|---|---|
-| sgharlow | SHA-256 sealing + 30s re-verify daemon | Sealing tied to LLM-emitted claim text (not just artifact bytes); deterministic re-derivation gate |
-| glaive | Typed evidence graph + 21 adversarial bypass tests | Verifier-gated claim emission (the graph is the consequence, not the gate); public DFIR-Metric score |
-| nighteye | 40+ tools + "bidirectional reasoning" | Tighter typed-function discipline; portable replay receipts |
-| REAGENT | 3 real cases, 0 FPs | Public reproducible corpus (CFReDS + Attack Range + DFIR-Metric Module III) |
-| Valhuntir (reference bar) | sift-gateway + 8 MCP backends + HMAC approvals | Per-call ed25519 binding (not per-approval); judge-runnable receipts |
+- **No bare "first to X" claims.** Cryptographic evidence sealing, typed evidence graphs, and bidirectional reasoning all exist in the open-source DFIR-AI landscape. OATH's contribution is the *integration*: deterministic verifier + visible self-correction + portable replay + public benchmark dominance, end-to-end.
+- **Not Daubert-certified.** The architecture is Daubert-shaped (examiner-reviewable, hash-anchored, methodologically reproducible) but admissibility is a judicial finding, not a property of code. See [`docs/ACCURACY.md`](ACCURACY.md) §6.
+- **No synthetic-examiner-avatar video.** The demo is live terminal screencast; no AI-generated faces speaking forensic conclusions.
