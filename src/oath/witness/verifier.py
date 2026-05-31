@@ -127,6 +127,7 @@ def default_registry() -> ReverifyRegistry:
     # Lazy imports so this module doesn't pull in every tool at import time.
     from oath.mcp.tools import (
         enumerate_credential_artifacts,
+        find_strings_on_image,
         parse_amcache,
         parse_evtx,
         parse_mft,
@@ -169,6 +170,11 @@ def default_registry() -> ReverifyRegistry:
         "enumerate_credential_artifacts",
         enumerate_credential_artifacts.reverify,
         required_kwargs=("mount_point",),
+    )
+    registry.register(
+        "find_strings_on_image",
+        find_strings_on_image.reverify,
+        required_kwargs=("image_path",),
     )
 
     _DEFAULT_REGISTRY = registry

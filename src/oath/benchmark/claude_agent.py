@@ -120,7 +120,7 @@ the final turn.
 
 
 USER_TEMPLATE = """\
-DFIR-Metric Module III question.
+DFIR-Metric question.
 
   question_id   : {question_id}
   image_sha256  : {image_sha256}
@@ -143,6 +143,17 @@ rule used by the scorer; format your candidate values accordingly:
   timestamp    : ISO-8601 UTC, second precision (e.g. 2026-04-12T14:32:01)
   path         : full path, slashes and case as found
   sid          : Windows SID (S-1-5-...)
+  list_of_strings,
+  nss_inode_filename_list :
+    Each CANDIDATE is itself a JSON ARRAY (encoded as a string) holding the
+    FULL list of matching items. The scorer compares as a set, so order
+    inside the array does not matter — but the list must be complete:
+    missing items OR extra items cause the candidate to be rejected.
+    Example candidate value:  "[\\"122150:foo.txt\\", \\"122151:bar.txt\\"]"
+
+    For NSS specifically (nss_inode_filename_list), each item is the exact
+    "<inode>:<filename>" string as it appears in the NIST String Search
+    expected answer.
 """
 
 
