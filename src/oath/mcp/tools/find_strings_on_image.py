@@ -74,11 +74,13 @@ class StringMatch(BaseModel):
 def to_nss_string(m: StringMatch) -> str:
     """Render a StringMatch as the NIST String Search "<inode>:<filename>" form.
 
-    NSS prepends "DELETED-" to the filename for entries fls marks deleted —
-    we match that exact convention so the agent's candidates can compare
-    set-equal to the corpus expected answer.
+    Corpus convention (DFIR-Metric / NIST CFTT String Search Test Data Set):
+    - filename is the BASENAME only (no directory prefix)
+    - the DELETED-/LIVE- prefix comes from NIST's test-data filename convention
+      itself, NOT from any wrapper we add
     """
-    name = f"DELETED-{m.filename}" if m.deleted else m.filename
+    # Strip directory prefix (e.g. "fat/DELETED-email-iron.txt" → "DELETED-email-iron.txt")
+    name = m.filename.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
     return f"{m.inode}:{name}"
 
 
@@ -179,12 +181,46 @@ def _parse_fls_bodyfile(body: bytes) -> list[tuple[int, str, bool, int]]:
 # --------------------------------------------------------------------------- #
 
 
+# Canonical default encodings for NSS-style multi-encoding email/keyword search.
+# NIST CFTT test data ships each plaintext sample in ascii / utf-8 / utf-16-le
+# / utf-16-be — exhaustive coverage requires we search the file bytes for the
+# pattern encoded under each of these.
+DEFAULT_ENCODINGS: tuple[str, ...] = ("ascii", "utf-8", "utf-16-le", "utf-16-be")
+
+
+def _encode_pattern_per_encoding(
+    pattern: str,
+    encodings: tuple[str, ...],
+    case_sensitive: bool,
+) -> list[tuple[str, bytes]]:
+    """Encode `pattern` once per encoding, returning (encoding_name, bytes) pairs.
+
+    Case-folding is handled in the search loop (data.lower() vs pattern.lower())
+    so we only need ONE encoded form per encoding regardless of case_sensitive.
+    Identical byte sequences across encodings (e.g. ascii == utf-8 for pure
+    ASCII patterns) are deduplicated.
+    """
+    out: list[tuple[str, bytes]] = []
+    seen: set[bytes] = set()
+    for enc in encodings:
+        try:
+            b = pattern.encode(enc)
+        except (UnicodeEncodeError, LookupError):
+            continue
+        if not b or b in seen:
+            continue
+        seen.add(b)
+        out.append((enc, b))
+    return out
+
+
 def find_strings_on_image(
     handle: EvidenceHandle,
     *,
     pattern: str,
     is_regex: bool = False,
     case_sensitive: bool = False,
+    encodings: tuple[str, ...] | list[str] = DEFAULT_ENCODINGS,
     image_offset: int = 0,
     name_substring: str | None = None,
     include_deleted: bool = True,
@@ -200,9 +236,16 @@ def find_strings_on_image(
     ----------
     pattern
         The search string. When `is_regex` is False (default), treated as a
-        literal substring; when True, compiled as a Python regex.
+        literal substring; when True, compiled as a Python regex against the
+        utf-8 decoded text (single encoding — regex multi-encoding is not
+        currently supported).
     case_sensitive
         Default False (NSS-style matching is case-insensitive).
+    encodings
+        Byte-encodings to search for the pattern under (literal mode only).
+        Default: ascii / utf-8 / utf-16-le / utf-16-be. NIST CFTT plaintext
+        samples ship in all four. Bound into args_canonical so reverify
+        recreates the same encoding set.
     image_offset
         Partition byte offset, in 512-byte sectors. Default 0 = whole image.
     name_substring
@@ -215,17 +258,23 @@ def find_strings_on_image(
         Files larger than this are skipped (default 256 MiB). Stops a single
         hiberfil.sys from eating the whole search.
     max_matches_per_file
-        Cap on `re.finditer` iterations per file. Total_match_count tells
-        the agent whether it was truncated.
+        Cap on iterations per file. Total_match_count tells the agent
+        whether it was truncated.
     """
     executor = executor or SubprocessTSKExecutor()
 
     # Normalize the args BEFORE binding into args_canonical so the verifier's
-    # re-derivation lands on the same canonical form.
+    # re-derivation lands on the same canonical form. Encodings are sorted +
+    # tupled for stable ordering.
+    normalized_encodings = tuple(sorted({str(e).strip().lower() for e in encodings if str(e).strip()}))
+    if not normalized_encodings:
+        normalized_encodings = DEFAULT_ENCODINGS
+
     norm_args: dict[str, object] = {
         "pattern": pattern,
         "is_regex": is_regex,
         "case_sensitive": case_sensitive,
+        "encodings": list(normalized_encodings),
         "image_offset": image_offset,
         "name_substring": name_substring,
         "include_deleted": include_deleted,
@@ -233,12 +282,16 @@ def find_strings_on_image(
         "max_matches_per_file": max_matches_per_file,
     }
 
-    # Build the matcher.
+    # Build matchers. Regex mode = single-encoding utf-8-decoded text path
+    # (regex+multi-encoding is non-trivial; use byte-level literal for NSS).
+    # Literal mode = per-encoding byte patterns.
     flags = 0 if case_sensitive else re.IGNORECASE
-    if is_regex:
-        matcher = re.compile(pattern, flags)
-    else:
-        matcher = re.compile(re.escape(pattern), flags)
+    regex_matcher = re.compile(pattern, flags) if is_regex else None
+    byte_patterns = (
+        []
+        if is_regex
+        else _encode_pattern_per_encoding(pattern, normalized_encodings, case_sensitive)
+    )
 
     # Step 1: enumerate files via fls.
     fls_out = executor.fls(handle.image_path, image_offset)
@@ -261,15 +314,40 @@ def find_strings_on_image(
             continue
         if not data:
             continue
-        text = data.decode("utf-8", errors="replace")
+
         first_offset: int | None = None
         count = 0
-        for m in matcher.finditer(text):
-            if first_offset is None:
-                first_offset = m.start()
-            count += 1
-            if count >= max_matches_per_file:
-                break
+        if regex_matcher is not None:
+            text = data.decode("utf-8", errors="replace")
+            for m in regex_matcher.finditer(text):
+                if first_offset is None:
+                    first_offset = m.start()
+                count += 1
+                if count >= max_matches_per_file:
+                    break
+        else:
+            # Byte-level multi-encoding literal search. For each encoded
+            # pattern, walk the file with bytes.find/index until exhausted or
+            # the cap is hit.
+            for _enc, pat in byte_patterns:
+                if not pat:
+                    continue
+                pos = 0
+                while True:
+                    if case_sensitive:
+                        idx = data.find(pat, pos)
+                    else:
+                        idx = data.lower().find(pat.lower(), pos)
+                    if idx < 0:
+                        break
+                    if first_offset is None or idx < first_offset:
+                        first_offset = idx
+                    count += 1
+                    pos = idx + max(1, len(pat))
+                    if count >= max_matches_per_file:
+                        break
+                if count >= max_matches_per_file:
+                    break
         if first_offset is None:
             continue
         matches.append(
@@ -332,6 +410,7 @@ def _recompute_stdout(
     pattern = str(args["pattern"])
     is_regex = bool(args.get("is_regex", False))
     case_sensitive = bool(args.get("case_sensitive", False))
+    encodings = tuple(args.get("encodings") or DEFAULT_ENCODINGS)
     image_offset = int(args.get("image_offset", 0))
     name_substring = args.get("name_substring")
     include_deleted = bool(args.get("include_deleted", True))
@@ -339,7 +418,12 @@ def _recompute_stdout(
     max_matches_per_file = int(args.get("max_matches_per_file", 32))
 
     flags = 0 if case_sensitive else re.IGNORECASE
-    matcher = re.compile(pattern if is_regex else re.escape(pattern), flags)
+    regex_matcher = re.compile(pattern, flags) if is_regex else None
+    byte_patterns = (
+        []
+        if is_regex
+        else _encode_pattern_per_encoding(pattern, encodings, case_sensitive)
+    )
 
     fls_out = executor.fls(image_path, image_offset)
     entries = _parse_fls_bodyfile(fls_out)
@@ -358,15 +442,37 @@ def _recompute_stdout(
             continue
         if not data:
             continue
-        text = data.decode("utf-8", errors="replace")
+
         first_offset: int | None = None
         count = 0
-        for m in matcher.finditer(text):
-            if first_offset is None:
-                first_offset = m.start()
-            count += 1
-            if count >= max_matches_per_file:
-                break
+        if regex_matcher is not None:
+            text = data.decode("utf-8", errors="replace")
+            for m in regex_matcher.finditer(text):
+                if first_offset is None:
+                    first_offset = m.start()
+                count += 1
+                if count >= max_matches_per_file:
+                    break
+        else:
+            for _enc, pat in byte_patterns:
+                if not pat:
+                    continue
+                pos = 0
+                while True:
+                    if case_sensitive:
+                        idx = data.find(pat, pos)
+                    else:
+                        idx = data.lower().find(pat.lower(), pos)
+                    if idx < 0:
+                        break
+                    if first_offset is None or idx < first_offset:
+                        first_offset = idx
+                    count += 1
+                    pos = idx + max(1, len(pat))
+                    if count >= max_matches_per_file:
+                        break
+                if count >= max_matches_per_file:
+                    break
         if first_offset is None:
             continue
         matches.append(
@@ -440,6 +546,7 @@ def to_nss_answer_payload(matches: list[StringMatch]) -> str:
 
 
 __all__ = [
+    "DEFAULT_ENCODINGS",
     "StringMatch",
     "SubprocessTSKExecutor",
     "TSKExecutor",
