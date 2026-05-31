@@ -18,6 +18,7 @@ Tools exposed to the agent:
   plaso_supertimeline(handle_id, plaso_path, ...)  — cross-source ordered timeline via psort
   run_hayabusa(handle_id, evtx_dir, ...)           — Sigma-driven EVTX triage with MITRE ATT&CK tagging
   vol3_query(handle_id, memdump_path, plugin, ...) — Volatility 3 plugin against a memory image
+  enumerate_credential_artifacts(handle_id, ...)   — filesystem inventory of credential-bearing files (FIRST call)
   oath_verify_claim(claim)                         — submit an AgentClaim to the Witness Oath Verifier
 
 Each typed-function tool:
@@ -52,6 +53,7 @@ from oath import __version__
 from oath.mcp.evidence_handle import open_handle
 from oath.mcp.persistence import EnvelopeStore, load_handle, save_handle
 from oath.mcp.tools import (
+    enumerate_credential_artifacts,
     parse_amcache,
     parse_evtx,
     parse_mft,
@@ -325,6 +327,31 @@ def _build_tool_descriptors() -> list[types.Tool]:
             },
         ),
         types.Tool(
+            name="enumerate_credential_artifacts",
+            description=(
+                "Walk the mounted volume and return a typed inventory of "
+                "credential-bearing artifacts (registry hives, DPAPI keys, "
+                "browser credential DBs, LSASS dumps, hiberfil/pagefile, "
+                "NTDS.dit, SSH keys). Every artifact carries its SHA-256. "
+                "This is the FIRST call in autonomous triage — it tells the "
+                "agent which downstream typed functions to invoke with which "
+                "paths."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "handle_id": {"type": "string"},
+                    "artifact_class_filter": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Whitelist of artifact classes (registry_hive, dpapi_master_key, browser_credential_db, lsass_dump, hibernation_file, pagefile, kernel_crash_dump, ntds_dit, ssh_private_key, ssh_known_hosts, ssh_host_key).",
+                    },
+                    "max_files": {"type": "integer", "description": "Safety cap; omit for no limit."},
+                },
+                "required": ["handle_id"],
+            },
+        ),
+        types.Tool(
             name="oath_verify_claim",
             description=(
                 "Submit an AgentClaim to the Witness Oath Verifier. The verifier "
@@ -562,6 +589,18 @@ def _dispatch_tool_inner(
             memdump_path=Path(arguments["memdump_path"]),
             plugin=arguments["plugin"],
             plugin_args=arguments.get("plugin_args"),
+            ctx=server.signing_ctx,
+            prev_hash=server.envelope_store.last_prev_hash,
+        )
+        envelope_id = server.envelope_store.append(env)
+        return _summarize_envelope(envelope_id, env)
+
+    if name == "enumerate_credential_artifacts":
+        handle = server.get_handle(arguments["handle_id"])
+        env = enumerate_credential_artifacts.enumerate_credential_artifacts(
+            handle,
+            artifact_class_filter=arguments.get("artifact_class_filter"),
+            max_files=arguments.get("max_files"),
             ctx=server.signing_ctx,
             prev_hash=server.envelope_store.last_prev_hash,
         )
