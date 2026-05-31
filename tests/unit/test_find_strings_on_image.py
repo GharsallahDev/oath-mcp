@@ -198,25 +198,39 @@ def test_output_sorted_for_determinism(ctx, handle):
 # --------------------------------------------------------------------------- #
 
 
-def test_to_nss_string_for_live_and_deleted():
-    live = StringMatch(
+def test_to_nss_string_strips_directory_prefix():
+    """NIST CFTT NSS uses basename only; directory components are stripped."""
+    m = StringMatch(
         inode=122150,
-        filename="Users/Alice/fee.txt",
-        deleted=False,
+        filename="fat/DELETED-email-iron-fat-ascii.txt",
+        deleted=True,
         file_size_bytes=34,
         first_match_offset=0,
         total_match_count=1,
     )
-    deleted = StringMatch(
+    assert to_nss_string(m) == "122150:DELETED-email-iron-fat-ascii.txt"
+
+
+def test_to_nss_string_no_double_deleted_prefix():
+    """DELETED-/LIVE- prefix comes from the NIST filename, not an OATH wrapper."""
+    deleted_file = StringMatch(
         inode=122160,
-        filename="Users/Alice/iron.txt",
+        filename="DELETED-email-iron-utf-16-be.txt",
         deleted=True,
         file_size_bytes=41,
         first_match_offset=0,
         total_match_count=1,
     )
-    assert to_nss_string(live) == "122150:Users/Alice/fee.txt"
-    assert to_nss_string(deleted) == "122160:DELETED-Users/Alice/iron.txt"
+    live_file = StringMatch(
+        inode=151870,
+        filename="LIVE-email-iron-ascii.txt",
+        deleted=False,
+        file_size_bytes=34,
+        first_match_offset=0,
+        total_match_count=1,
+    )
+    assert to_nss_string(deleted_file) == "122160:DELETED-email-iron-utf-16-be.txt"
+    assert to_nss_string(live_file) == "151870:LIVE-email-iron-ascii.txt"
 
 
 def test_to_nss_answer_payload_is_canonical_json(ctx, handle):
@@ -229,9 +243,8 @@ def test_to_nss_answer_payload_is_canonical_json(ctx, handle):
     assert isinstance(parsed, list)
     assert all(isinstance(x, str) for x in parsed)
     assert parsed == sorted(parsed)
-    # Must contain the three matching inode:filename strings
-    assert "122150:Users/Alice/fee.txt" in parsed
-    assert "122160:DELETED-Users/Alice/iron.txt" in parsed
+    # Basenames only — directory prefix stripped, no synthetic DELETED- prefix
+    assert "122150:fee.txt" in parsed
 
 
 # --------------------------------------------------------------------------- #
