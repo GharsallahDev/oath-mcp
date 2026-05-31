@@ -90,21 +90,110 @@ def verify(finding_id: str, receipt_dir: str) -> None:
 
 @main.command()
 @click.argument("module", type=click.Choice(["I", "II", "III"]))
-@click.option("--corpus", default="./corpus/dfir-metric", help="DFIR-Metric corpus root.")
 @click.option(
-    "--publish", is_flag=True, help="Publish the resulting score to the public leaderboard."
+    "--corpus",
+    type=click.Path(exists=True, dir_okay=False, readable=True),
+    required=True,
+    help="Path to DFIR-Metric corpus file (JSONL or JSON array).",
 )
-def benchmark(module: str, corpus: str, publish: bool) -> None:
-    """Run a DFIR-Metric module and (optionally) update the leaderboard.
+@click.option("--k", default=4, show_default=True, help="TUS@K — candidates per question.")
+@click.option(
+    "--image-sha256",
+    default=None,
+    help=(
+        "If set, only questions bound to this image SHA-256 are scored "
+        "(other questions are skipped)."
+    ),
+)
+@click.option(
+    "--techniques",
+    multiple=True,
+    help="MITRE ATT&CK technique IDs to filter on (multiple flags = OR).",
+)
+@click.option(
+    "--out-dir",
+    type=click.Path(file_okay=False),
+    default="./logs/benchmarks",
+    show_default=True,
+    help="Where to write the BenchmarkResult JSON.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help=(
+        "Run with a stub agent (no LLM calls) that emits empty candidates. "
+        "Useful for end-to-end smoke-testing the harness."
+    ),
+)
+def benchmark(
+    module: str,
+    corpus: str,
+    k: int,
+    image_sha256: str | None,
+    techniques: tuple[str, ...],
+    out_dir: str,
+    dry_run: bool,
+) -> None:
+    """Score the agent on a DFIR-Metric corpus and persist the result.
 
     Module III is the practical-analysis subset where the published frontier-LLM
-    baseline is GPT-4.1 at 38.5% TUS@4. OATH targets >60%.
+    baseline is GPT-4.1 at 38.5% TUS@4. OATH targets >60% via verifier-gated
+    self-correction.
     """
-    click.echo(
-        f"[oath benchmark] module={module}  corpus={corpus}  publish={publish}"
+    from pathlib import Path
+
+    from oath.benchmark import (
+        AgentResponse,
+        BenchmarkHarness,
+        filter_by_image,
+        filter_by_techniques,
+        load_corpus,
+        persist_result,
     )
-    click.echo("(not yet implemented)", err=True)
-    sys.exit(2)
+
+    questions, corpus_sha256 = load_corpus(Path(corpus))
+    if image_sha256:
+        questions = filter_by_image(questions, image_sha256)
+    if techniques:
+        questions = filter_by_techniques(questions, list(techniques))
+
+    if not questions:
+        click.echo("No questions match the given filters.", err=True)
+        sys.exit(2)
+
+    if not dry_run:
+        click.echo(
+            "Live agent_fn is not yet wired. Pass --dry-run to smoke-test the "
+            "harness, or run `oath serve` and integrate via the Anthropic SDK.",
+            err=True,
+        )
+        sys.exit(2)
+
+    # Dry-run stub: every question gets zero candidates. The harness still
+    # produces a valid BenchmarkResult (TUS = 0.0) so we can prove the
+    # plumbing works end-to-end without making API calls.
+    def stub_agent(_q, _k: int) -> AgentResponse:  # noqa: ANN001
+        return AgentResponse(candidates=[])
+
+    harness = BenchmarkHarness(
+        agent_fn=stub_agent,
+        k=k,
+        module=module,
+        progress_callback=lambda i, n, q: click.echo(
+            f"  [{i+1}/{n}] {q.question_id} ({q.answer_type.value})"
+        ),
+    )
+    result = harness.run(questions, corpus_sha256=corpus_sha256)
+    out_path = persist_result(result, Path(out_dir))
+
+    click.echo("")
+    click.echo(f"  module:        {result.module}")
+    click.echo(f"  k:             {result.k}")
+    click.echo(f"  questions:     {result.total_questions}")
+    click.echo(f"  matched:       {result.matched_count}")
+    click.echo(f"  tus@{result.k}:        {result.tus_at_k:.4f}")
+    click.echo(f"  corpus sha256: {result.corpus_sha256}")
+    click.echo(f"  result file:   {out_path}")
 
 
 @main.command()
