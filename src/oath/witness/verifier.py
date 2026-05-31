@@ -125,7 +125,15 @@ def default_registry() -> ReverifyRegistry:
     registry = ReverifyRegistry()
 
     # Lazy imports so this module doesn't pull in every tool at import time.
-    from oath.mcp.tools import parse_amcache, parse_evtx, parse_mft, parse_prefetch, run_hayabusa
+    from oath.mcp.tools import (
+        parse_amcache,
+        parse_evtx,
+        parse_mft,
+        parse_prefetch,
+        parse_registry,
+        run_hayabusa,
+        vol3_query,
+    )
 
     registry.register("parse_evtx", parse_evtx.reverify, required_kwargs=("evtx_path",))
     registry.register("parse_mft", parse_mft.reverify, required_kwargs=("mft_path",))
@@ -136,7 +144,15 @@ def default_registry() -> ReverifyRegistry:
         "parse_prefetch", parse_prefetch.reverify, required_kwargs=("prefetch_dir",)
     )
     registry.register(
+        "parse_registry",
+        parse_registry.reverify,
+        required_kwargs=("hive_path", "plugins_dir"),
+    )
+    registry.register(
         "run_hayabusa", run_hayabusa.reverify, required_kwargs=("evtx_dir", "rules_dir")
+    )
+    registry.register(
+        "vol3_query", vol3_query.reverify, required_kwargs=("memdump_path",)
     )
 
     _DEFAULT_REGISTRY = registry

@@ -54,6 +54,7 @@ from oath.mcp.tools import (
     parse_evtx,
     parse_mft,
     parse_prefetch,
+    parse_registry,
     run_hayabusa,
     vol3_query,
 )
@@ -220,6 +221,32 @@ def _build_tool_descriptors() -> list[types.Tool]:
                     "technique_filter": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": ["handle_id", "evtx_dir"],
+            },
+        ),
+        types.Tool(
+            name="parse_registry",
+            description=(
+                "Parse a Windows registry hive (SOFTWARE/SYSTEM/SAM/NTUSER.DAT/"
+                "UsrClass.dat) via RECmd batch-plugin mode. Returns persistence "
+                "findings (RunKeys/RunOnce/Services/TaskCache) + execution residue "
+                "(UserAssist/ShimCache/BAM). Use plugin_filter=['RunKeys','TaskCache',"
+                "'Services'] for narrow PtH persistence triage."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "handle_id": {"type": "string"},
+                    "hive_path": {"type": "string"},
+                    "hive_label": {
+                        "type": "string",
+                        "description": (
+                            "Friendly hive label (SOFTWARE / SYSTEM / NTUSER:<user>)."
+                        ),
+                    },
+                    "plugins_dir": {"type": "string"},
+                    "plugin_filter": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["handle_id", "hive_path", "hive_label"],
             },
         ),
         types.Tool(
@@ -424,6 +451,20 @@ def _dispatch_tool_inner(
             rules_dir=Path(arguments["rules_dir"]) if arguments.get("rules_dir") else None,
             min_level=arguments.get("min_level"),
             technique_filter=arguments.get("technique_filter"),
+            ctx=server.signing_ctx,
+            prev_hash=server.envelope_store.last_prev_hash,
+        )
+        envelope_id = server.envelope_store.append(env)
+        return _summarize_envelope(envelope_id, env)
+
+    if name == "parse_registry":
+        handle = server.get_handle(arguments["handle_id"])
+        env = parse_registry.parse_registry(
+            handle,
+            hive_path=Path(arguments["hive_path"]),
+            hive_label=arguments["hive_label"],
+            plugins_dir=Path(arguments["plugins_dir"]) if arguments.get("plugins_dir") else None,
+            plugin_filter=arguments.get("plugin_filter"),
             ctx=server.signing_ctx,
             prev_hash=server.envelope_store.last_prev_hash,
         )
