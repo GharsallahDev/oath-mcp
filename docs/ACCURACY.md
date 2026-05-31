@@ -9,21 +9,36 @@ OATH targets the **DFIR-Metric Module III (NIST String Search)** benchmark from 
 | System | Corpus | TUS@4 |
 |---|---|---|
 | GPT-4.1 (published baseline) | DFIR-Metric Module III NSS | 38.5% |
-| OATH deterministic baseline (no LLM) | DFIR-Metric Module III NSS (510 questions, both ss-win + ss-unix) | _to be filled in at submission_ |
-| OATH live agent (Claude + verifier) | DFIR-Metric Module III NSS (same 510 questions) | _to be filled in at submission_ |
+| OATH deterministic baseline (no LLM) | DFIR-Metric Module III NSS (510 questions, both ss-win + ss-unix) | **62.55%** (cf. `logs/benchmarks/nss-baseline_III_tus4.json`) |
+| OATH live agent (Vertex Gemini + verifier) | DFIR-Metric Module III NSS (same 510 questions) | _live run in progress_ |
 
 Both OATH numbers use the same scorer and corpus SHA-256 as the GPT-4.1 baseline. The corpus is publicly downloadable from `https://raw.githubusercontent.com/DFIR-Metric/DFIR-Metric/main/DFIR-Metric-NSS.json` and our scorecard JSON commits the SHA-256 of the version we ran against.
 
 ## §2. Reproducibility
 
-Any examiner can reproduce these numbers in three steps:
+Any examiner can reproduce these numbers from a fresh clone:
 
 ```bash
 git clone https://github.com/GharsallahDev/oath && cd oath
-bash scripts/install-tools.sh          # idempotent; runs once per machine
+bash scripts/install-tools.sh
 source .oath-tools/env.sh
-oath mount path/to/ss-win-07-25-18.dd  # NIST CFTT String Search image v1.1
-oath benchmark III --corpus corpus/DFIR-Metric-NSS.json --live
+
+# Fetch NIST CFTT String Search Test Data Set v1.1 (8.7 MB zip, expands to 2 x 2 GB .dd)
+curl -sSL -o /tmp/nss.zip "https://cfreds-archive.nist.gov/StringSearching/string-search-federated-testing-data-set-version-1-1-revised-september-27-2019.zip"
+unzip /tmp/nss.zip -d corpus/nss-string-search
+
+# Mount each .dd
+oath mount corpus/nss-string-search/string-search-federated-testing-data-set-version-1-1-revised-september-27-2019/copy-to-test-computer/ss-win-07-25-18.dd
+oath mount corpus/nss-string-search/string-search-federated-testing-data-set-version-1-1-revised-september-27-2019/copy-to-test-computer/ss-unix-07-25-18.dd
+
+# Fetch the DFIR-Metric NSS corpus
+curl -sSL -o corpus/DFIR-Metric-NSS.json "https://raw.githubusercontent.com/DFIR-Metric/DFIR-Metric/main/DFIR-Metric-NSS.json"
+
+# Reproduce the deterministic baseline (no LLM)
+python scripts/nss_baseline.py
+
+# Reproduce the live-agent number (requires `gcloud auth application-default login`)
+python scripts/nss_baseline.py --live-vertex
 ```
 
 The published BenchmarkResult JSON includes per-question audit: candidate list, matched candidate index, verifier-side telemetry. `oath verify <envelope_id>` re-derives the corresponding envelope.
