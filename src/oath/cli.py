@@ -125,6 +125,27 @@ def verify(finding_id: str, receipt_dir: str) -> None:
         "Useful for end-to-end smoke-testing the harness."
     ),
 )
+@click.option(
+    "--live",
+    is_flag=True,
+    help=(
+        "Run with the live Claude-driven agent — calls Anthropic Messages "
+        "with the OATH MCP server attached. Requires ANTHROPIC_API_KEY in "
+        "the environment and `pip install 'oath[claude]'`."
+    ),
+)
+@click.option(
+    "--model",
+    default=None,
+    help="Override the Claude model ID (defaults to the pinned model).",
+)
+@click.option(
+    "--mcp-logs-dir",
+    type=click.Path(file_okay=False),
+    default="./logs",
+    show_default=True,
+    help="Logs directory the MCP server uses for envelope/claim persistence.",
+)
 def benchmark(
     module: str,
     corpus: str,
@@ -133,6 +154,9 @@ def benchmark(
     techniques: tuple[str, ...],
     out_dir: str,
     dry_run: bool,
+    live: bool,
+    model: str | None,
+    mcp_logs_dir: str,
 ) -> None:
     """Score the agent on a DFIR-Metric corpus and persist the result.
 
@@ -161,22 +185,46 @@ def benchmark(
         click.echo("No questions match the given filters.", err=True)
         sys.exit(2)
 
-    if not dry_run:
+    if not (dry_run or live):
         click.echo(
-            "Live agent_fn is not yet wired. Pass --dry-run to smoke-test the "
-            "harness, or run `oath serve` and integrate via the Anthropic SDK.",
+            "Choose one: --dry-run (stub agent, no API calls) or --live "
+            "(Claude-driven via Anthropic SDK + OATH MCP server).",
             err=True,
         )
         sys.exit(2)
+    if dry_run and live:
+        click.echo("--dry-run and --live are mutually exclusive.", err=True)
+        sys.exit(2)
 
-    # Dry-run stub: every question gets zero candidates. The harness still
-    # produces a valid BenchmarkResult (TUS = 0.0) so we can prove the
-    # plumbing works end-to-end without making API calls.
-    def stub_agent(_q, _k: int) -> AgentResponse:  # noqa: ANN001
-        return AgentResponse(candidates=[])
+    if dry_run:
+        # Dry-run stub: every question gets zero candidates. The harness
+        # still produces a valid BenchmarkResult (TUS = 0.0) so we can prove
+        # the plumbing works end-to-end without making API calls.
+        def agent_fn(_q, _k: int) -> AgentResponse:  # noqa: ANN001
+            return AgentResponse(candidates=[])
+    else:
+        from oath.benchmark.claude_agent import (
+            ClaudeAgentConfig,
+            build_claude_agent_fn,
+        )
+
+        cfg_kwargs: dict[str, object] = {
+            "extra_mcp_args": (
+                "--logs-dir",
+                str(mcp_logs_dir),
+            ),
+        }
+        if model:
+            cfg_kwargs["model"] = model
+        config = ClaudeAgentConfig(**cfg_kwargs)
+        agent_fn = build_claude_agent_fn(
+            config,
+            envelopes_dir=Path(mcp_logs_dir) / "envelopes",
+            claims_journal=Path(mcp_logs_dir) / "claims.jsonl",
+        )
 
     harness = BenchmarkHarness(
-        agent_fn=stub_agent,
+        agent_fn=agent_fn,
         k=k,
         module=module,
         progress_callback=lambda i, n, q: click.echo(
