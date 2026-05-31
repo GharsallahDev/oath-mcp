@@ -49,7 +49,7 @@ from oath.receipt.notarized import (
 
 # Same MFTECmd binary; the version match here is intentional. We list it
 # independently in case the typed surfaces diverge across versions.
-MFTECMD_VERSION = "1.2.2.0"
+MFTECMD_VERSION = "2026.5.0"
 
 
 # Canonical USN reason codes (subset most often triaged). MFTECmd emits the

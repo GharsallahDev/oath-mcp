@@ -53,7 +53,7 @@ from oath.receipt.notarized import (
 # Hayabusa is updated frequently; "2.x" represents the major API line we support.
 # `hayabusa --version` is captured into the envelope at mint time for the exact
 # string. This constant is the floor.
-HAYABUSA_VERSION_FLOOR = "2.0.0"
+HAYABUSA_VERSION_FLOOR = "3.9.0"
 
 # Hayabusa severity levels (lowest -> highest)
 SEVERITY_LEVELS = ("informational", "low", "medium", "high", "critical")

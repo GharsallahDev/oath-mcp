@@ -45,7 +45,7 @@ from oath.receipt.notarized import (
 # Must match docker/eztools/dotnet-tools.json. The Witness Oath Verifier checks
 # this when re-deriving — a tool-version drift between mint and verify makes
 # the envelope invalid by design.
-EVTXECMD_VERSION = "1.5.0.0"
+EVTXECMD_VERSION = "2026.5.0"
 
 
 # --------------------------------------------------------------------------- #

@@ -46,7 +46,7 @@ from oath.receipt.notarized import (
 )
 
 # Pinned in docker/eztools/dotnet-tools.json
-MFTECMD_VERSION = "1.2.2.0"
+MFTECMD_VERSION = "2026.5.0"
 
 
 # --------------------------------------------------------------------------- #
