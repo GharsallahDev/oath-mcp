@@ -2,34 +2,30 @@
 
 **Autonomous DFIR agent. Every forensic claim takes the oath: deterministic re-derivation from the original-image SHA-256, or it doesn't ship.**
 
-Submission to the SANS *Find Evil!* hackathon (deadline 2026-06-16). Built on the SANS SIFT Workstation + Protocol SIFT.
+OATH is an autonomous incident-response agent that wraps a hardened, cryptographically-anchored layer around the SIFT Workstation toolchain. Every finding the agent emits is required to pass a deterministic re-derivation gate; claims that cannot be re-derived are surfaced to the examiner as "the agent suspected this but couldn't prove it" — never as confirmed findings.
 
----
+## Why it exists
 
-## The pitch in 60 seconds
+Existing autonomous DFIR agents treat hallucination as a behavioral problem and patch it with prompt-engineering. Fabricated forensic evidence is a different class of failure: in court it's career-ending; in production it's the kind of mistake that hands the wrong person to legal. OATH treats hallucination as an architectural problem and solves it by construction:
 
-Protocol SIFT works. It also hallucinates more than its authors want — and in forensics, fabricated evidence is career-ending. Existing autonomous DFIR agents handle this with prompt-based guardrails ("be careful, cite sources"), which the agent can ignore at any time.
+1. **The Witness Oath Verifier** — every LLM-emitted claim must pass a deterministic re-derivation gate (regex / YARA / struct-parse from the original-image SHA-256) before entering the evidence graph. Claims that fail re-derivation are **quarantined** — visible to the examiner, but never promoted to findings.
 
-OATH handles it architecturally:
+2. **The Ralph Wiggum Loop** — when the agent's first hypothesis fails the verifier, it visibly abandons the wrong hypothesis on screen and narrates revision. Self-correction is architecturally enforced, not aspirational.
 
-1. **The Witness Oath Verifier** — every LLM-emitted claim must pass a deterministic re-derivation gate (regex / YARA / struct-parse from the original-image SHA-256) before entering the evidence graph. Claims that fail re-derivation are **quarantined** — visible to the examiner as "the agent suspected this but couldn't prove it." Hallucinations are made visible, not hidden.
+3. **The Replay Receipt** — every finding the agent ships is a one-line replay command (`oath verify <finding-id>`) that re-extracts the supporting evidence from the original image on any analyst's laptop in seconds. *What cannot replay does not exist.*
 
-2. **The Ralph Wiggum Loop** — when the agent's first hypothesis fails the verifier, it visibly abandons the wrong hypothesis on screen and narrates revision. Self-correction is architecturally enforced, not aspirational. *(Term coined by Rob T. Lee for the [Protocol SIFT initiative](https://www.sans.org/blog/protocol-sift-experimental-research-initiative-ai-assisted-dfir).)*
-
-3. **The Replay Receipt** — every finding the agent ships is a one-line replay command (`oath verify <finding-id>`) that re-extracts the supporting evidence from the original image on any analyst's laptop in seconds. What cannot replay does not exist.
-
-4. **The DFIR-Metric Leaderboard** — published score on the public NIST CFTT Module III practical-analysis corpus (DFIR-Metric, [arXiv:2505.19973](https://arxiv.org/abs/2505.19973)). The current frontier LLM baseline is GPT-4.1 at 38.5% TUS@4. OATH targets >60%, with `verify.sh` ships in the repo so any judge can re-run a benchmark case on their laptop in under 60 seconds.
+4. **A public reproducibility audit** — OATH is scored against the [DFIR-Metric](https://arxiv.org/abs/2505.19973) practical-analysis benchmark and ships `verify.sh` so anyone can independently re-run a benchmark case in under a minute.
 
 ## What you can do in 60 seconds
 
 ```bash
-# Mount any case image (SIFT loop-r enforced)
-oath mount ./splunk-attack-range-pth.E01
+# Mount any case image read-only
+oath mount ./case.E01
 
 # Run autonomous triage
 oath triage
 
-# Re-verify any finding on your own machine
+# Re-verify any finding from the original image
 oath verify <finding-id>
 
 # Re-run one DFIR-Metric benchmark case
@@ -38,18 +34,18 @@ oath verify <finding-id>
 
 See [`docs/TRY_IT_OUT.md`](docs/TRY_IT_OUT.md) for full install.
 
-## Submission components (per Find Evil! rules)
+## What's inside
 
-| Required | Where |
+| Layer | Purpose |
 |---|---|
-| Code repository (MIT) | this repo |
-| ≤5-min demo video (live terminal, ≥1 self-correction) | [`demo/`](demo/) |
-| Architecture diagram | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
-| Written project description | [`docs/PROJECT.md`](docs/PROJECT.md) |
-| Dataset documentation | [`docs/DATASET.md`](docs/DATASET.md) |
-| Accuracy report | [`docs/ACCURACY.md`](docs/ACCURACY.md) |
-| Try-it-out instructions | [`docs/TRY_IT_OUT.md`](docs/TRY_IT_OUT.md) |
-| Agent execution logs | [`logs/`](logs/) (ed25519-signed JSONL) |
+| `src/oath/receipt/` | `Notarized[T]` cryptographic envelope (ed25519 + BLAKE3 + RFC 8785 JCS canonicalization + hash chain) |
+| `src/oath/mcp/` | Custom MCP server exposing typed forensic functions to any MCP-compatible AI runtime; per-tool persistence and chain-of-custody |
+| `src/oath/mcp/tools/` | Typed wrappers around the SIFT toolchain (EZ tools, Volatility 3, Hayabusa) — each mints a `Notarized` envelope |
+| `src/oath/witness/` | The Witness Oath Verifier + the Ralph Wiggum self-correction loop |
+| `src/oath/agent/` | Hypothesis-driven orchestration → structured TriageReport |
+| `src/oath/benchmark/` | DFIR-Metric Module III scoring harness |
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the full diagram and the four load-bearing claims.
 
 ## License
 
