@@ -137,13 +137,20 @@ def extract_extensions(text: str) -> list[str]:
 def resolve_filesystem_offset(text: str, image_name: str) -> int | None:
     """Pick the partition offset based on the question's filesystem hint.
 
-    Question prose distinguishes by ordinal ('first/second/third windows data
-    partition') OR by explicit fs name ('linux filesystem', 'exfat', 'ntfs').
-    Ordinal takes precedence (it's most common in the corpus).
+    The corpus inlines the mmls partition table in the question prose, so a
+    naive 'contains' check matches BOTH the user's question line AND the
+    mmls output (e.g. "Linux filesystem data" appears in the mmls dump even
+    for HFS+ questions). We scope the filesystem hint to the first chunk of
+    text BEFORE the mmls block (everything before "The mmls commant" — the
+    corpus's typo'd marker).
     """
     image_key = "ss-unix" if "ss-unix" in image_name else "ss-win"
     parts = PARTITIONS[image_key]
-    t = text.lower()
+    # Slice off the mmls dump.
+    head = re.split(
+        r"\bThe\s+mmls\b", text, maxsplit=1, flags=re.IGNORECASE
+    )[0]
+    t = head.lower()
     # Ordinal (allow the 'partion' typo in the corpus).
     for ordinal, key in [
         ("first windows data", "first"),
@@ -153,14 +160,16 @@ def resolve_filesystem_offset(text: str, image_name: str) -> int | None:
     ]:
         if ordinal in t:
             return parts.get(key)
-    if "linux filesystem" in t:
+    # HFS+ is checked before linux because "hfs" implies HFS+ regardless of
+    # whether 'linux filesystem' also appears somewhere.
+    if "hfs" in t:
+        return parts.get("hfs")
+    if "linux filesystem" in t or "linux" in t:
         return parts.get("linux")
     if "exfat" in t:
         return parts.get("exfat")
     if "ntfs" in t:
         return parts.get("ntfs")
-    if "hfs" in t:
-        return parts.get("hfs")
     if "fat" in t and "exfat" not in t:
         return parts.get("fat") or parts.get("first")
     return parts.get("first")
