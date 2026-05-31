@@ -54,6 +54,9 @@ benchmark = [
 vertex = [
     "google-cloud-aiplatform>=1.50.0",  # adversarial corpus generation
 ]
+claude = [
+    "anthropic>=0.40.0",  # benchmark live-agent bridge (Anthropic SDK + MCP)
+]
 
 [project.scripts]
 oath = "oath.cli:main"
