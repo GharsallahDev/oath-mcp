@@ -62,3 +62,6 @@ benchmarks/cache/
 !logs/.gitkeep
 !corpus/.gitkeep
 !symbols/.gitkeep
+
+# Sandboxed local forensic tools (large, machine-specific)
+.oath-tools/

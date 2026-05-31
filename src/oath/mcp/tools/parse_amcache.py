@@ -43,7 +43,7 @@ from oath.receipt.notarized import (
     mint,
 )
 
-AMCACHEPARSER_VERSION = "2.0.0.1"
+AMCACHEPARSER_VERSION = "2026.5.0"
 
 
 # --------------------------------------------------------------------------- #

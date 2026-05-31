@@ -49,7 +49,7 @@ from oath.receipt.notarized import (
     mint,
 )
 
-RECMD_VERSION = "2.0.0.0"
+RECMD_VERSION = "2026.5.0"
 
 # Common persistence + execution-residue plugins shipped with RECmd. Authors
 # add more; we include the canonical PtH-triage set as a default starting

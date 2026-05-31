@@ -39,7 +39,7 @@ from oath.receipt.notarized import (
     mint,
 )
 
-PECMD_VERSION = "1.5.0.0"
+PECMD_VERSION = "2026.5.0"
 
 
 # --------------------------------------------------------------------------- #
