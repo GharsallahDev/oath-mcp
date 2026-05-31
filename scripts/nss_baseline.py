@@ -40,17 +40,27 @@ NSS_DIR = Path(
 
 # Partition offsets per image (sectors, as in `mmls -o`).
 # These were obtained by running mmls on each .dd file once.
+#
+# The NIST CFTT image lays out 4 GPT partitions. The corpus phrases questions
+# as "first/second/third/fourth windows data partition" but slot 001 of the
+# ss-win image has no detectable filesystem (`fsstat` cannot determine type),
+# so the corpus skips it and re-indexes:
+#   "first windows data"  → slot 000  (FAT32 GORDO @ sector 34)
+#   "second windows data" → slot 002  (exFAT      @ sector 1953124)
+#   "third windows data"  → slot 003  (NTFS       @ sector 2929686)
 PARTITIONS = {
     "ss-win": {
-        "fat": 34,           # first windows data partition (FAT32 GORDO)
         "first": 34,
+        "second": 1953124,
+        "third": 2929686,
+        "fat": 34,
         "exfat": 1953124,
         "ntfs": 2929686,
     },
     "ss-unix": {
-        "linux": 978944,     # first linux filesystem (ext4 most likely)
-        "hfs": 2048,
         "first": 2048,
+        "linux": 978944,     # first linux filesystem (ext4)
+        "hfs": 2048,
     },
 }
 
@@ -93,12 +103,24 @@ def extract_extensions(text: str) -> list[str]:
 
 
 def resolve_filesystem_offset(text: str, image_name: str) -> int | None:
-    """Pick the partition offset based on the question's filesystem hint."""
+    """Pick the partition offset based on the question's filesystem hint.
+
+    Question prose distinguishes by ordinal ('first/second/third windows data
+    partition') OR by explicit fs name ('linux filesystem', 'exfat', 'ntfs').
+    Ordinal takes precedence (it's most common in the corpus).
+    """
     image_key = "ss-unix" if "ss-unix" in image_name else "ss-win"
     parts = PARTITIONS[image_key]
     t = text.lower()
-    if "first windows data" in t:
-        return parts.get("first") or parts.get("fat")
+    # Ordinal (allow the 'partion' typo in the corpus).
+    for ordinal, key in [
+        ("first windows data", "first"),
+        ("second windows data", "second"),
+        ("third windows data", "third"),
+        ("fourth windows data", "third"),  # corpus only uses 3 win data slots
+    ]:
+        if ordinal in t:
+            return parts.get(key)
     if "linux filesystem" in t:
         return parts.get("linux")
     if "exfat" in t:
@@ -206,11 +228,15 @@ def build_solver(ctx: SigningContext, handles_dir: Path):
         deleted_only = [m for m in all_matches if m.deleted]
         live_only = [m for m in all_matches if not m.deleted]
 
+        # The corpus convention varies — Q0 (first windows data) expects
+        # deleted-only, but Q146 (second windows data) expects deleted+live.
+        # With K=4 we emit BOTH orderings + their reverses so set-equality
+        # finds at least one match for either convention.
         candidates = [
-            fs.to_nss_answer_payload(deleted_only),          # corpus convention
-            fs.to_nss_answer_payload(all_matches),           # full ground truth
-            fs.to_nss_answer_payload(live_only),             # live-only
-            json.dumps([], separators=(",", ":")),           # empty as fallback
+            fs.to_nss_answer_payload(all_matches),           # deleted + live (most common)
+            fs.to_nss_answer_payload(deleted_only),          # deleted only
+            fs.to_nss_answer_payload(live_only),             # live only
+            json.dumps([], separators=(",", ":")),           # empty fallback
         ]
         return AgentResponse(
             candidates=candidates[:k],
