@@ -78,9 +78,14 @@ def to_nss_string(m: StringMatch) -> str:
     - filename is the BASENAME only (no directory prefix)
     - the DELETED-/LIVE- prefix comes from NIST's test-data filename convention
       itself, NOT from any wrapper we add
+    - NTFS `$FILE_NAME` duplicate-attribute entries (where one inode has BOTH
+      a standard $30 name record AND a $144 $FILE_NAME record) are collapsed
+      to a single entry — the corpus uses one `<inode>:<filename>` per file
     """
     # Strip directory prefix (e.g. "fat/DELETED-email-iron.txt" → "DELETED-email-iron.txt")
     name = m.filename.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+    # Strip NTFS `$FILE_NAME` duplicate-record suffix
+    name = name.replace(" ($FILE_NAME)", "")
     return f"{m.inode}:{name}"
 
 

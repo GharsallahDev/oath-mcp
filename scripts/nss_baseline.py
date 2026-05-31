@@ -69,19 +69,51 @@ PARTITIONS = {
 
 
 def extract_pattern(text: str) -> str | None:
-    """Extract the search pattern (email or quoted string) from question text."""
-    # First-pref: an email address (corpus heavy with these)
+    """Extract the search pattern from the question prose.
+
+    Search-target hierarchy (most-specific wins):
+      1. Email address  (`iron.man@marvel.com`)
+      2. Phone number   (`(901)555-1111`, `301.555-9009`, `800-555-1122`, ...)
+      3. SSN / credit-card  (digit groups separated by `-`)
+      4. Quoted string  ("..." or '...'), but skip corpus-format-example
+         strings like `inode:filename`, `DELETED-test-email.txt`,
+         `LIVE-test-email.txt`, `count`
+    """
+    # 1. Email
     m = re.search(r"\b[\w.+-]+@[\w-]+\.[a-z]{2,}\b", text)
     if m:
         return m.group(0)
-    # Then: a "double-quoted" string
-    m = re.search(r'"([^"]+)"', text)
+
+    # 2. Phone numbers — the corpus uses several formats. Match the most
+    # general shape: optionally-parenthesized 3-digit area code, then digits
+    # separated by `-` or `.`. Backslash-escaped parens in the corpus prose
+    # are preserved literally (the search needle is what the file contains;
+    # the escape is the corpus author's regex-escaping habit).
+    m = re.search(
+        r"phone number\s+([\\()0-9.\-]{8,})", text, flags=re.IGNORECASE
+    )
     if m:
-        return m.group(1)
-    # Then: a 'single-quoted' string
-    m = re.search(r"'([^']+)'", text)
-    if m:
-        return m.group(1)
+        # Strip whitespace + trailing punctuation, keep the digit/separator core.
+        candidate = m.group(1).strip().rstrip(".,;")
+        # Unescape `\(` `\)` since the actual file content has literal parens.
+        candidate = candidate.replace("\\(", "(").replace("\\)", ")")
+        return candidate
+
+    # 3. Common quoted-pattern path, with format-example exclusions.
+    EXCLUDE = {
+        "inode:filename", "inode:filename, ...",
+        "DELETED-test-email.txt", "LIVE-test-email.txt",
+        "count",
+    }
+    for m in re.finditer(r'"([^"]+)"', text):
+        s = m.group(1)
+        if s.strip() not in EXCLUDE and ":" not in s and "DELETED-" not in s and "LIVE-" not in s:
+            return s
+    for m in re.finditer(r"'([^']+)'", text):
+        s = m.group(1)
+        if s.strip() not in EXCLUDE and ":" not in s and "DELETED-" not in s and "LIVE-" not in s:
+            return s
+
     return None
 
 
