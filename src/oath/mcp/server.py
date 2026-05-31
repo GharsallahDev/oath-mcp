@@ -18,6 +18,7 @@ Tools exposed to the agent:
   plaso_supertimeline(handle_id, plaso_path, ...)  — cross-source ordered timeline via psort
   run_hayabusa(handle_id, evtx_dir, ...)           — Sigma-driven EVTX triage with MITRE ATT&CK tagging
   vol3_query(handle_id, memdump_path, plugin, ...) — Volatility 3 plugin against a memory image
+  find_strings_on_image(handle_id, pattern, ...)   — NIST String Search: typed (inode, filename) match list
   enumerate_credential_artifacts(handle_id, ...)   — filesystem inventory of credential-bearing files (FIRST call)
   oath_verify_claim(claim)                         — submit an AgentClaim to the Witness Oath Verifier
 
@@ -54,6 +55,7 @@ from oath.mcp.evidence_handle import open_handle
 from oath.mcp.persistence import EnvelopeStore, load_handle, save_handle
 from oath.mcp.tools import (
     enumerate_credential_artifacts,
+    find_strings_on_image,
     parse_amcache,
     parse_evtx,
     parse_mft,
@@ -327,6 +329,32 @@ def _build_tool_descriptors() -> list[types.Tool]:
             },
         ),
         types.Tool(
+            name="find_strings_on_image",
+            description=(
+                "Search a forensic disk image for files whose content matches a "
+                "regex or literal substring. Backs NIST String Search-style "
+                "questions: returns typed (inode, filename, deleted, "
+                "first_match_offset, total_match_count) records, deduplicated "
+                "and sorted. Use to_nss_answer_payload() on the data field to "
+                "render the corpus-comparable answer."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "handle_id": {"type": "string"},
+                    "pattern": {"type": "string"},
+                    "is_regex": {"type": "boolean"},
+                    "case_sensitive": {"type": "boolean"},
+                    "image_offset": {"type": "integer", "description": "Partition byte offset in sectors. Default 0."},
+                    "name_substring": {"type": "string", "description": "Case-insensitive filename filter applied BEFORE icat (cheap)."},
+                    "include_deleted": {"type": "boolean", "description": "Default true; NSS questions need deleted entries."},
+                    "max_file_size_bytes": {"type": "integer"},
+                    "max_matches_per_file": {"type": "integer"},
+                },
+                "required": ["handle_id", "pattern"],
+            },
+        ),
+        types.Tool(
             name="enumerate_credential_artifacts",
             description=(
                 "Walk the mounted volume and return a typed inventory of "
@@ -589,6 +617,24 @@ def _dispatch_tool_inner(
             memdump_path=Path(arguments["memdump_path"]),
             plugin=arguments["plugin"],
             plugin_args=arguments.get("plugin_args"),
+            ctx=server.signing_ctx,
+            prev_hash=server.envelope_store.last_prev_hash,
+        )
+        envelope_id = server.envelope_store.append(env)
+        return _summarize_envelope(envelope_id, env)
+
+    if name == "find_strings_on_image":
+        handle = server.get_handle(arguments["handle_id"])
+        env = find_strings_on_image.find_strings_on_image(
+            handle,
+            pattern=arguments["pattern"],
+            is_regex=bool(arguments.get("is_regex", False)),
+            case_sensitive=bool(arguments.get("case_sensitive", False)),
+            image_offset=int(arguments.get("image_offset", 0)),
+            name_substring=arguments.get("name_substring"),
+            include_deleted=bool(arguments.get("include_deleted", True)),
+            max_file_size_bytes=int(arguments.get("max_file_size_bytes", 256 * 1024 * 1024)),
+            max_matches_per_file=int(arguments.get("max_matches_per_file", 32)),
             ctx=server.signing_ctx,
             prev_hash=server.envelope_store.last_prev_hash,
         )

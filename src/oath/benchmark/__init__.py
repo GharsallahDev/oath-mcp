@@ -14,6 +14,7 @@ from oath.benchmark.corpus import (
     filter_by_techniques,
     hash_corpus,
     load_corpus,
+    load_nss_corpus,
 )
 from oath.benchmark.harness import (
     AgentResponse,
@@ -22,9 +23,11 @@ from oath.benchmark.harness import (
     persist_result,
 )
 from oath.benchmark.question import (
+    LIST_ANSWER_TYPES,
     AnswerType,
     DfirMetricQuestion,
     any_match,
+    list_match_stats,
     matches,
 )
 from oath.benchmark.scorer import (
@@ -36,6 +39,7 @@ from oath.benchmark.scorer import (
 )
 
 __all__ = [
+    "LIST_ANSWER_TYPES",
     "AgentResponse",
     "AnswerType",
     "BenchmarkAgentFn",
@@ -49,7 +53,9 @@ __all__ = [
     "filter_by_image",
     "filter_by_techniques",
     "hash_corpus",
+    "list_match_stats",
     "load_corpus",
+    "load_nss_corpus",
     "matches",
     "persist_result",
     "score_attempt",

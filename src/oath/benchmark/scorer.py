@@ -40,7 +40,7 @@ class QuestionAttempt(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     question_id: str
-    image_sha256: str
+    image_sha256: str | None = None
     answer_type: AnswerType
     expected_answer: str
     candidates: tuple[str, ...] = Field(
