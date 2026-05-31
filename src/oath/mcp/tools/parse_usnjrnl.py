@@ -238,7 +238,6 @@ def parse_usnjrnl(
     }
 
     argv: list[str] = [
-        "dotnet",
         "MFTECmd",
         "-f",
         str(j_path),
@@ -289,7 +288,7 @@ def reverify(
     import blake3
 
     executor = executor or SubprocessExecutor()
-    argv = ["dotnet", "MFTECmd", "-f", str(j_path), "--csv", "-", "--csvf", "stdout"]
+    argv = ["MFTECmd", "-f", str(j_path), "--csv", "-", "--csvf", "stdout"]
     try:
         stdout_bytes = executor.run(argv)
     except Exception as e:

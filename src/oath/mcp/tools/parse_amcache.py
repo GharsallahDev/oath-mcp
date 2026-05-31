@@ -224,7 +224,6 @@ def parse_amcache(
     }
 
     argv: list[str] = [
-        "dotnet",
         "AmcacheParser",
         "-f",
         str(amcache_path),
@@ -272,7 +271,6 @@ def reverify(
 
     executor = executor or SubprocessExecutor()
     argv = [
-        "dotnet",
         "AmcacheParser",
         "-f",
         str(amcache_path),

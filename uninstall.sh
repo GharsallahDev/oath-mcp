@@ -63,13 +63,39 @@ if [ -d "$OATH_ROOT/corpus" ] || [ -d "$OATH_ROOT/logs" ] || [ -d "$OATH_ROOT/ke
 fi
 
 # --- 4. brew packages ------------------------------------------------------ #
-echo "Step 4 — Homebrew packages installed for OATH"
+# --- 4. plaso Docker image + colima VM ------------------------------------- #
+if command -v docker >/dev/null 2>&1 && docker image inspect log2timeline/plaso:latest >/dev/null 2>&1; then
+  echo "Step 4a — remove plaso Docker image (log2timeline/plaso:latest, ~1.5 GB)"
+  if prompt "  proceed?"; then
+    docker rmi log2timeline/plaso:latest 2>&1 | sed 's/^/  /'
+    echo "  ✓ removed"
+  else
+    echo "  (skipped)"
+  fi
+  echo
+fi
+
+if command -v colima >/dev/null 2>&1; then
+  echo "Step 4b — stop + delete colima VM (frees ~8 GB of disk)"
+  if prompt "  proceed?"; then
+    colima stop 2>&1 | sed 's/^/  /' || true
+    colima delete --force 2>&1 | sed 's/^/  /' || true
+    echo "  ✓ done"
+  else
+    echo "  (skipped)"
+  fi
+  echo
+fi
+
+# --- 5. brew packages ------------------------------------------------------ #
+echo "Step 5 — Homebrew packages installed for OATH"
 echo "  dotnet (.NET 10 SDK + runtime, ~400 MB)"
 echo "  sleuthkit + deps (afflib, libewf, ~35 MB)"
 echo "  powershell (~70 MB; was used to fetch EZ Tools)"
+echo "  colima + docker (Apple-Silicon-friendly Docker runtime, ~150 MB)"
 if command -v brew >/dev/null 2>&1; then
-  if prompt "  uninstall all four?"; then
-    brew uninstall --ignore-dependencies dotnet sleuthkit afflib libewf powershell 2>&1 | sed 's/^/  /'
+  if prompt "  uninstall all six?"; then
+    brew uninstall --ignore-dependencies dotnet sleuthkit afflib libewf powershell colima docker docker-compose lima 2>&1 | sed 's/^/  /' || true
     echo "  ✓ done"
   else
     echo "  (skipped — brew packages stay installed)"

@@ -126,7 +126,7 @@ class SubprocessExecutor:
 
     For Dockerized tools, the argv prefix is something like
     `["docker", "exec", "oath-eztools", "dotnet", "EvtxECmd", ...]`. For
-    locally-installed tools, just `["dotnet", "EvtxECmd", ...]`.
+    locally-installed tools, just `["EvtxECmd", ...]`.
     """
 
     cwd: Path | None = None
@@ -274,7 +274,6 @@ def parse_evtx(
     # Build EvtxECmd command line.
     # `--csv -` writes CSV to stdout (no file artifact left behind).
     argv: list[str] = [
-        "dotnet",
         "EvtxECmd",
         "-f",
         str(evtx_path),
@@ -342,7 +341,7 @@ def reverify(
     # Re-execute. We trust args_canonical to encode the original filters.
     # (For now, naive re-run with the same file; future tightening: parse
     # args_canonical and reconstruct the exact argv.)
-    argv = ["dotnet", "EvtxECmd", "-f", str(evtx_path), "--csv", "-", "--csvf", "stdout"]
+    argv = ["EvtxECmd", "-f", str(evtx_path), "--csv", "-", "--csvf", "stdout"]
     try:
         stdout_bytes = executor.run(argv)
     except subprocess.CalledProcessError as e:

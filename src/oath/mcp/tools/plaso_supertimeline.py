@@ -56,7 +56,7 @@ from oath.receipt.notarized import (
 
 # Pinned plaso version. plaso version drift changes parser output formatting;
 # we refuse to verify across versions.
-PLASO_VERSION_FLOOR = "20240826"
+PLASO_VERSION_FLOOR = "20260512"
 
 
 # --------------------------------------------------------------------------- #

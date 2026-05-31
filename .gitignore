@@ -65,3 +65,8 @@ benchmarks/cache/
 
 # Sandboxed local forensic tools (large, machine-specific)
 .oath-tools/
+
+# Per-run logs / envelope store / signing keys (machine-specific)
+logs/
+.oath/
+keys/
