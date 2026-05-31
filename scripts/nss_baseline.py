@@ -268,6 +268,14 @@ def build_solver(ctx: SigningContext, handles_dir: Path):
                 print(f"  [{question.question_id}] fls error: {e}", file=sys.stderr)
                 return AgentResponse(candidates=["0"])
             entries = _parse_fls_bodyfile(fls_out)
+            # NTFS emits a second fls row per file with `($FILE_NAME)`
+            # suffix (the $144 record). Collapse those so we don't double-
+            # count NTFS partition questions.
+            entries = [
+                (inode, name, deleted, size)
+                for inode, name, deleted, size in entries
+                if "($FILE_NAME)" not in name
+            ]
             ext_set = {f".{e.lower()}" for e in exts}
             total = sum(
                 1 for inode, name, deleted, size in entries
