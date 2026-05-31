@@ -126,26 +126,34 @@ def verify(envelope_id: str | None, logs_dir: str, kwargs_json: str | None) -> N
         click.echo(f"No envelopes/ under {logs_dir}.", err=True)
         sys.exit(2)
 
-    if envelope_id is None:
-        ids = sorted(p.stem for p in envelopes_dir.glob("*.json"))
-        if not ids:
-            click.echo("(no envelopes recorded)")
-            return
-        click.echo("Known envelope IDs:")
-        for eid in ids:
-            click.echo(f"  {eid}")
-        return
-
-    target = envelopes_dir / f"{envelope_id}.json"
-    if not target.exists():
-        click.echo(f"envelope not found: {target}", err=True)
-        sys.exit(2)
-
+    from oath.mcp.persistence import EnvelopeStore
     from oath.receipt.notarized import Notarized
     from oath.witness.verifier import default_registry
 
-    raw = _json.loads(target.read_text(encoding="utf-8"))
-    envelope = Notarized.model_validate(raw)
+    # Discover all known runs (one JSONL per run_id).
+    run_ids = sorted(p.stem for p in envelopes_dir.glob("*.jsonl"))
+
+    if envelope_id is None:
+        if not run_ids:
+            click.echo("(no envelopes recorded)")
+            return
+        click.echo("Known envelope IDs:")
+        for rid in run_ids:
+            store = EnvelopeStore(rid, envelopes_dir)
+            for eid in sorted(store._index.keys()):
+                click.echo(f"  {rid}/{eid}")
+        return
+
+    # Look up the envelope across every run.
+    envelope = None
+    for rid in run_ids:
+        store = EnvelopeStore(rid, envelopes_dir)
+        if envelope_id in store._index:
+            envelope = store.load(envelope_id)
+            break
+    if envelope is None:
+        click.echo(f"envelope not found: {envelope_id} (searched {len(run_ids)} run(s))", err=True)
+        sys.exit(2)
 
     # Resolve per-envelope kwargs. Two sources, merged left-to-right:
     #   (a) inferred from envelope.header.args_canonical (paths the tool

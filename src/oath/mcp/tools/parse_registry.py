@@ -164,7 +164,16 @@ def _parse_recmd_csv(
                 value_name=row.get("ValueName") or None,
                 value_data=row.get("ValueData") or None,
                 last_write_ts=row.get("LastWriteTimestamp") or None,
-                raw={k: v for k, v in row.items() if v},
+                # csv.DictReader puts overflow columns under a None key with a
+                # list value when a row has more cells than the header has
+                # columns (real RECmd output occasionally emits this). Drop
+                # None keys and stringify list overflow so the typed dict
+                # contract holds.
+                raw={
+                    str(k): (";".join(v) if isinstance(v, list) else v)
+                    for k, v in row.items()
+                    if k is not None and v
+                },
                 hive_image_offset=hive_offset,
             )
         )
