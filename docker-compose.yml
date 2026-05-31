@@ -1,0 +1,86 @@
+# OATH local development environment.
+#
+# Brings up the forensic toolchain (Volatility 3, EZ tools, Hayabusa, plaso) as
+# Dockerized services so developers don't need to install a full SIFT VM for
+# local iteration. At submission time the same MCP server is also tested inside
+# the SANS SIFT Workstation OVA — see docs/TRY_IT_OUT.md.
+
+services:
+  # --- Forensic tool runners (long-lived containers we exec into) ---
+
+  vol3:
+    # Volatility 3 with bundled Windows symbol packs.
+    image: volatility/volatility3:2.7.0
+    container_name: oath-vol3
+    volumes:
+      - ./corpus:/evidence:ro
+      - ./symbols:/symbols
+      - vol3-cache:/cache
+    environment:
+      VOLATILITY_PLUGIN_PATH: /custom-plugins
+    command: ["tail", "-f", "/dev/null"]
+    restart: unless-stopped
+
+  eztools:
+    # Eric Zimmerman's .NET tools — MFTECmd, EvtxECmd, AmcacheParser, PECmd,
+    # SrumECmd, WxTCmd, RECmd, SBECmd, JLECmd, LECmd. Pinned dotnet-tools.json.
+    build:
+      context: ./docker/eztools
+    container_name: oath-eztools
+    volumes:
+      - ./corpus:/evidence:ro
+      - ./output/eztools:/output
+    command: ["tail", "-f", "/dev/null"]
+    restart: unless-stopped
+
+  hayabusa:
+    # Yamato Security's Hayabusa — Sigma-driven EVTX triage. Static Rust binary.
+    image: yamatosecurity/hayabusa:latest
+    container_name: oath-hayabusa
+    volumes:
+      - ./corpus:/evidence:ro
+      - ./output/hayabusa:/output
+    command: ["tail", "-f", "/dev/null"]
+    restart: unless-stopped
+
+  plaso:
+    # log2timeline + psort for super-timelines.
+    image: log2timeline/plaso:latest
+    container_name: oath-plaso
+    volumes:
+      - ./corpus:/evidence:ro
+      - ./output/plaso:/output
+    command: ["tail", "-f", "/dev/null"]
+    restart: unless-stopped
+
+  # --- The OATH MCP server itself ---
+
+  oath-mcp:
+    build:
+      context: .
+      dockerfile: docker/oath/Dockerfile
+    container_name: oath-mcp
+    depends_on:
+      - vol3
+      - eztools
+      - hayabusa
+      - plaso
+    volumes:
+      - ./src:/app/src
+      - ./corpus:/evidence:ro
+      - ./output:/output
+      - ./logs:/logs
+      - ./keys:/keys:ro
+    environment:
+      OATH_VOL3_HOST: vol3
+      OATH_EZTOOLS_HOST: eztools
+      OATH_HAYABUSA_HOST: hayabusa
+      OATH_PLASO_HOST: plaso
+      OATH_LOG_DIR: /logs
+      OATH_KEY_DIR: /keys
+    ports:
+      - "8765:8765"  # MCP HTTP transport (for Claude Code integration)
+    restart: unless-stopped
+
+volumes:
+  vol3-cache:
