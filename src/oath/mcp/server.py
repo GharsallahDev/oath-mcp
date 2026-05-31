@@ -7,16 +7,18 @@ Boot:
 
 Tools exposed to the agent:
 
-  oath_mount(image_path)                      — create EvidenceHandle, returns handle_id
-  oath_list_handles()                          — list known handles
-  parse_evtx(handle_id, evtx_path, ...)        — typed function #1
-  parse_mft(handle_id, mft_path, ...)          — typed function #2
-  parse_amcache(handle_id, amcache_path, ...)  — typed function #3
-  parse_prefetch(handle_id, prefetch_dir, ...) — typed function #4
-  run_hayabusa(handle_id, evtx_dir, ...)       — typed function #5
-  vol3_query(handle_id, memdump_path, plugin, ...) — typed function #6
-  oath_verify_claim(claim)                     — submit an AgentClaim to the Witness Oath Verifier;
-                                                 returns VerifyResult JSON
+  oath_mount(image_path)                          — create EvidenceHandle, returns handle_id
+  oath_list_handles()                              — list known handles
+  parse_evtx(handle_id, evtx_path, ...)            — Windows event-log records (EvtxECmd)
+  parse_mft(handle_id, mft_path, ...)              — NTFS $MFT entries with $SI/$FN tripwire
+  parse_amcache(handle_id, amcache_path, ...)      — Amcache program-execution residue + SHA-1
+  parse_prefetch(handle_id, prefetch_dir, ...)     — Prefetch run history (up to 8 timestamps)
+  parse_registry(handle_id, hive_path, ...)        — RECmd batch-plugin findings (Run/Services/TaskCache)
+  parse_usnjrnl(handle_id, j_path, ...)            — NTFS $UsnJrnl:$J change journal (anti-forensic surface)
+  plaso_supertimeline(handle_id, plaso_path, ...)  — cross-source ordered timeline via psort
+  run_hayabusa(handle_id, evtx_dir, ...)           — Sigma-driven EVTX triage with MITRE ATT&CK tagging
+  vol3_query(handle_id, memdump_path, plugin, ...) — Volatility 3 plugin against a memory image
+  oath_verify_claim(claim)                         — submit an AgentClaim to the Witness Oath Verifier
 
 Each typed-function tool:
   1. Materializes the EvidenceHandle from handle_id
@@ -55,6 +57,8 @@ from oath.mcp.tools import (
     parse_mft,
     parse_prefetch,
     parse_registry,
+    parse_usnjrnl,
+    plaso_supertimeline,
     run_hayabusa,
     vol3_query,
 )
@@ -247,6 +251,55 @@ def _build_tool_descriptors() -> list[types.Tool]:
                     "plugin_filter": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": ["handle_id", "hive_path", "hive_label"],
+            },
+        ),
+        types.Tool(
+            name="parse_usnjrnl",
+            description=(
+                "Parse the NTFS $UsnJrnl:$J change journal via MFTECmd. Returns "
+                "USN records (create / rename / delete / data-overwrite). The "
+                "highest-signal anti-forensic surface: catches attackers who "
+                "deleted files (FileDelete reason) or dropped-then-renamed "
+                "(RenameOldName/RenameNewName pairs). Filter by reason name."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "handle_id": {"type": "string"},
+                    "j_path": {"type": "string", "description": "Path to extracted $J stream."},
+                    "reason_filter": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "USN reason names (FileDelete, RenameNewName, RenameOldName, DataOverwrite, NamedDataOverwrite, FileCreate, …).",
+                    },
+                    "since": {"type": "string", "description": "ISO-8601 lower bound on UpdateTimestamp."},
+                    "filter_path": {"type": "string", "description": "Case-insensitive substring filter on full_path."},
+                },
+                "required": ["handle_id", "j_path"],
+            },
+        ),
+        types.Tool(
+            name="plaso_supertimeline",
+            description=(
+                "Query a pre-built plaso .plaso storage file via psort. Returns a "
+                "cross-source ordered timeline (EVTX, registry, $MFT, Prefetch, "
+                "browser history, …). Pin a high-confidence anchor event then use "
+                "the timeline to correlate surrounding context. source_filter "
+                "accepts plaso source_short codes (EVT, REG, FILE, PREF, LNK)."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "handle_id": {"type": "string"},
+                    "plaso_path": {"type": "string"},
+                    "plaso_store_sha256": {"type": "string"},
+                    "time_window_start": {"type": "string"},
+                    "time_window_end": {"type": "string"},
+                    "source_filter": {"type": "array", "items": {"type": "string"}},
+                    "parser_filter": {"type": "array", "items": {"type": "string"}},
+                    "description_substring": {"type": "string"},
+                },
+                "required": ["handle_id", "plaso_path"],
             },
         ),
         types.Tool(
@@ -465,6 +518,37 @@ def _dispatch_tool_inner(
             hive_label=arguments["hive_label"],
             plugins_dir=Path(arguments["plugins_dir"]) if arguments.get("plugins_dir") else None,
             plugin_filter=arguments.get("plugin_filter"),
+            ctx=server.signing_ctx,
+            prev_hash=server.envelope_store.last_prev_hash,
+        )
+        envelope_id = server.envelope_store.append(env)
+        return _summarize_envelope(envelope_id, env)
+
+    if name == "parse_usnjrnl":
+        handle = server.get_handle(arguments["handle_id"])
+        env = parse_usnjrnl.parse_usnjrnl(
+            handle,
+            j_path=Path(arguments["j_path"]),
+            reason_filter=arguments.get("reason_filter"),
+            since=arguments.get("since"),
+            filter_path=arguments.get("filter_path"),
+            ctx=server.signing_ctx,
+            prev_hash=server.envelope_store.last_prev_hash,
+        )
+        envelope_id = server.envelope_store.append(env)
+        return _summarize_envelope(envelope_id, env)
+
+    if name == "plaso_supertimeline":
+        handle = server.get_handle(arguments["handle_id"])
+        env = plaso_supertimeline.plaso_supertimeline(
+            handle,
+            plaso_path=Path(arguments["plaso_path"]),
+            plaso_store_sha256=arguments.get("plaso_store_sha256"),
+            time_window_start=arguments.get("time_window_start"),
+            time_window_end=arguments.get("time_window_end"),
+            source_filter=arguments.get("source_filter"),
+            parser_filter=arguments.get("parser_filter"),
+            description_substring=arguments.get("description_substring"),
             ctx=server.signing_ctx,
             prev_hash=server.envelope_store.last_prev_hash,
         )

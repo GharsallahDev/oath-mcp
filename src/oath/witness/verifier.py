@@ -131,6 +131,8 @@ def default_registry() -> ReverifyRegistry:
         parse_mft,
         parse_prefetch,
         parse_registry,
+        parse_usnjrnl,
+        plaso_supertimeline,
         run_hayabusa,
         vol3_query,
     )
@@ -147,6 +149,14 @@ def default_registry() -> ReverifyRegistry:
         "parse_registry",
         parse_registry.reverify,
         required_kwargs=("hive_path", "plugins_dir"),
+    )
+    registry.register(
+        "parse_usnjrnl", parse_usnjrnl.reverify, required_kwargs=("j_path",)
+    )
+    registry.register(
+        "plaso_supertimeline",
+        plaso_supertimeline.reverify,
+        required_kwargs=("plaso_path",),
     )
     registry.register(
         "run_hayabusa", run_hayabusa.reverify, required_kwargs=("evtx_dir", "rules_dir")
