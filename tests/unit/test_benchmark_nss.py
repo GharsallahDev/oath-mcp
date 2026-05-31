@@ -248,8 +248,28 @@ def test_load_nss_corpus_rejects_non_string_answer(tmp_path: Path):
         json.dumps({"questions": [{"question": "x", "answer": [1, 2, 3]}]}),
         encoding="utf-8",
     )
-    with pytest.raises(ValueError, match="must be a list of strings"):
+    with pytest.raises(ValueError, match="must contain only strings"):
         load_nss_corpus(p)
+
+
+def test_load_nss_corpus_accepts_scalar_answer(tmp_path: Path):
+    """The real DFIR-Metric-NSS file mixes list answers and scalar counts."""
+    payload = {
+        "questions": [
+            {"question": "Find files containing iron", "answer": ["1:a.txt"]},
+            {"question": "How many deleted files contain iron?", "answer": "390"},
+            {"question": "What is the SID of the user?", "answer": "S-1-5-21-XXX"},
+        ]
+    }
+    p = tmp_path / "mixed.json"
+    p.write_text(json.dumps(payload), encoding="utf-8")
+    questions, _ = load_nss_corpus(p)
+    assert questions[0].answer_type == AnswerType.NSS_INODE_FILENAME_LIST
+    assert questions[1].answer_type == AnswerType.NUMERIC
+    assert questions[1].expected_answer == "390"
+    # SID-looking strings get STRING_CI (the SID heuristic is left to the
+    # corpus author to retag if desired).
+    assert questions[2].answer_type == AnswerType.STRING_CI
 
 
 def test_nss_corpus_hash_is_order_independent(tmp_path: Path):
