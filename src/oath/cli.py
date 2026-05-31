@@ -33,17 +33,39 @@ def main() -> None:
 
 @main.command()
 @click.argument("image", type=click.Path(exists=True, dir_okay=False, readable=True))
-@click.option("--out", default="./.oath/handle.json", help="Where to write the EvidenceHandle.")
-def mount(image: str, out: str) -> None:
-    """Mount a case image read-only and emit an EvidenceHandle.
+@click.option(
+    "--handles-dir",
+    type=click.Path(file_okay=False),
+    default="./logs/handles",
+    show_default=True,
+    help="Directory where the EvidenceHandle JSON is persisted.",
+)
+def mount(image: str, handles_dir: str) -> None:
+    """Open a forensic image and emit an EvidenceHandle.
 
-    Read-only is enforced architecturally: losetup -r on Linux, FUSE read-only
-    overlay on macOS. The EvidenceHandle records the image SHA-256, mount point,
-    and a Notarized signature that downstream tool invocations bind to.
+    Computes the SHA-256 of the image, mounts it read-only where possible
+    (losetup -r on Linux, raw-file on macOS), and persists the handle so
+    downstream typed-function calls can reference it by handle_id.
     """
-    click.echo(f"[oath mount] {image}  →  {out}")
-    click.echo("(not yet implemented)", err=True)
-    sys.exit(2)
+    from pathlib import Path
+
+    from oath.mcp.evidence_handle import open_handle
+    from oath.mcp.persistence import save_handle
+
+    image_path = Path(image).expanduser().resolve()
+    click.echo(f"  computing image SHA-256 ({image_path.stat().st_size / 1e9:.2f} GB)…")
+    handle = open_handle(image_path)
+    handles_root = Path(handles_dir)
+    handle_id = save_handle(handle, handles_root)
+
+    click.echo("")
+    click.echo(f"  handle_id     : {handle_id}")
+    click.echo(f"  image         : {handle.image_path}")
+    click.echo(f"  image_sha256  : {handle.image_sha256}")
+    click.echo(f"  image_size    : {handle.image_size_bytes:,} bytes")
+    click.echo(f"  mount_tech    : {handle.mount_tech}")
+    click.echo(f"  mount_point   : {handle.mount_point or '(none — raw-file access)'}")
+    click.echo(f"  saved at      : {handles_root / (handle_id + '.json')}")
 
 
 @main.command()

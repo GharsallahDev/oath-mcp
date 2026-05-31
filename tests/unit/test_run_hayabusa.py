@@ -40,6 +40,12 @@ class FakeExecutor:
 
     def run(self, argv: list[str], *, capture: bool = True, timeout: float = 300) -> bytes:
         self.calls.append(list(argv))
+        # Hayabusa 3.x writes results to the file at `-o <path>`. Production
+        # code calls executor.run() then opens that file. Mirror the contract.
+        if "-o" in argv:
+            idx = argv.index("-o")
+            if idx + 1 < len(argv):
+                Path(argv[idx + 1]).write_bytes(self.payload)
         return self.payload
 
 

@@ -189,7 +189,6 @@ def parse_prefetch(
     }
 
     argv: list[str] = [
-        "dotnet",
         "PECmd",
         "-d",
         str(prefetch_dir),
@@ -230,7 +229,7 @@ def reverify(
     import blake3
 
     executor = executor or SubprocessExecutor()
-    argv = ["dotnet", "PECmd", "-d", str(prefetch_dir), "--csv", "-", "--csvf", "stdout"]
+    argv = ["PECmd", "-d", str(prefetch_dir), "--csv", "-", "--csvf", "stdout"]
     try:
         stdout_bytes = executor.run(argv)
     except Exception as e:

@@ -223,7 +223,6 @@ def parse_registry(
     }
 
     argv: list[str] = [
-        "dotnet",
         "RECmd",
         "-f",
         str(hive_path),
@@ -285,7 +284,7 @@ def reverify(
                 "deterministic semantics.",
             )
 
-    argv = ["dotnet", "RECmd", "-f", str(hive_path), "--bn", "ALL", "--csv", "-", "--csvf", "stdout"]
+    argv = ["RECmd", "-f", str(hive_path), "--bn", "ALL", "--csv", "-", "--csvf", "stdout"]
     if plugins_dir:
         argv += ["--bp", str(plugins_dir)]
     try:

@@ -249,21 +249,38 @@ def run_hayabusa(
         "evtx_image_offset": evtx_image_offset,
     }
 
-    argv: list[str] = [
-        "hayabusa",
-        "csv-timeline",
-        "-d",
-        str(evtx_dir),
-        "--output",
-        "-",  # stdout
-        "--quiet",
-    ]
-    if rules_dir:
-        argv += ["--rules", str(rules_dir)]
-    if min_level:
-        argv += ["--min-level", min_level]
+    # Hayabusa 3.x dropped `--output -` (stdout); it only writes to a file.
+    # Spool to a temp file, read it back, delete. The bytes we hash for the
+    # envelope are the file contents — semantics identical to "stdout" for
+    # the verifier's BLAKE3 chain.
+    import tempfile
 
-    stdout_bytes = executor.run(argv)
+    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tmp:
+        out_path = tmp.name
+    try:
+        argv: list[str] = [
+            "hayabusa",
+            "csv-timeline",
+            "-d",
+            str(evtx_dir),
+            "-o",
+            out_path,
+            "-w",       # no-wizard (skip the interactive prompt)
+            "-C",       # clobber existing output file
+            "-Q",       # quiet errors
+        ]
+        if rules_dir:
+            argv += ["-r", str(rules_dir)]
+        if min_level:
+            argv += ["-m", min_level]
+
+        # Hayabusa's stdout is its banner + progress; discard it.
+        executor.run(argv)
+        with open(out_path, "rb") as fh:
+            stdout_bytes = fh.read()
+    finally:
+        Path(out_path).unlink(missing_ok=True)
+
     hits = _parse_hayabusa_csv(
         stdout_bytes, min_level=min_level, technique_filter=normalized_techniques
     )
@@ -314,14 +331,27 @@ def reverify(
                 "envelope semantics deterministic.",
             )
 
-    argv = ["hayabusa", "csv-timeline", "-d", str(evtx_dir), "--output", "-", "--quiet"]
-    if rules_dir:
-        argv += ["--rules", str(rules_dir)]
+    import tempfile
 
+    with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tmp:
+        out_path = tmp.name
     try:
-        stdout_bytes = executor.run(argv)
-    except Exception as e:
-        return False, f"Hayabusa re-run failed: {e}"
+        argv = [
+            "hayabusa", "csv-timeline",
+            "-d", str(evtx_dir),
+            "-o", out_path,
+            "-w", "-C", "-Q",
+        ]
+        if rules_dir:
+            argv += ["-r", str(rules_dir)]
+        try:
+            executor.run(argv)
+            with open(out_path, "rb") as fh:
+                stdout_bytes = fh.read()
+        except Exception as e:
+            return False, f"Hayabusa re-run failed: {e}"
+    finally:
+        Path(out_path).unlink(missing_ok=True)
 
     actual = blake3.blake3(stdout_bytes).hexdigest()
     expected = envelope.header.stdout_blake3
