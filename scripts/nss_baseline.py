@@ -141,11 +141,38 @@ def detect_image(text: str) -> str:
 # ----- solver ----- #
 
 
+def _partition_phrase_to_offset(phrase: str, image_key: str) -> int | None:
+    """Map an LLM-emitted partition phrase to a sector offset."""
+    parts = PARTITIONS[image_key]
+    p = phrase.lower().strip()
+    if "first windows data" in p:
+        return parts.get("first")
+    if "second windows data" in p:
+        return parts.get("second")
+    if "third windows data" in p or "fourth windows data" in p:
+        return parts.get("third")
+    if "linux" in p:
+        return parts.get("linux")
+    if "exfat" in p:
+        return parts.get("exfat")
+    if "ntfs" in p:
+        return parts.get("ntfs")
+    if "hfs" in p:
+        return parts.get("hfs")
+    if "fat" in p:
+        return parts.get("fat") or parts.get("first")
+    return parts.get("first")
+
+
 def build_solver(ctx: SigningContext, handles_dir: Path):
-    """Build a BenchmarkAgentFn closure."""
+    """Build a BenchmarkAgentFn closure.
+
+    The returned solver also accepts a third optional argument when called
+    via the live-LLM pipeline: `llm_args` (an LLMArgs proposal from the
+    Claude/Gemini agent). When present, those args OVERRIDE the heuristic
+    resolution. When absent, the heuristic resolver runs.
+    """
     # Pre-mount both images so the solver picks the right handle by image name.
-    # The harness already provides the image_sha256 indirectly via question
-    # text reference. We re-derive the handle_id by walking the handles dir.
     handles_by_image: dict[str, str] = {}
     for hp in handles_dir.glob("*.json"):
         h = load_handle(hp.stem, handles_dir)
@@ -153,24 +180,48 @@ def build_solver(ctx: SigningContext, handles_dir: Path):
         handles_by_image[name] = hp.stem
     print(f"  handles available: {list(handles_by_image)}", file=sys.stderr)
 
-    def solve(question: DfirMetricQuestion, k: int) -> AgentResponse:
+    def solve(question: DfirMetricQuestion, k: int, llm_args=None) -> AgentResponse:
         text = question.question_text
-        image_name = detect_image(text)
+
+        # Image: LLM override or heuristic
+        if llm_args and llm_args.image:
+            image_name = llm_args.image
+        else:
+            image_name = detect_image(text)
+
         handle_id = handles_by_image.get(image_name)
         if handle_id is None:
-            # No handle for this image (e.g. ss-unix not mounted). Return [].
+            # No handle for this image. Return [].
             empty_payload = json.dumps([], separators=(",", ":"))
             return AgentResponse(candidates=[empty_payload])
 
         handle = load_handle(handle_id, handles_dir)
-        offset = resolve_filesystem_offset(text, image_name)
-        pattern = extract_pattern(text)
+        image_key = "ss-unix" if "ss-unix" in image_name else "ss-win"
 
-        is_count = question.answer_type == AnswerType.NUMERIC
+        # Offset: LLM override or heuristic
+        if llm_args and llm_args.partition:
+            offset = _partition_phrase_to_offset(llm_args.partition, image_key)
+        else:
+            offset = resolve_filesystem_offset(text, image_name)
+
+        # Pattern: LLM override or heuristic
+        if llm_args and llm_args.pattern:
+            pattern = llm_args.pattern
+        else:
+            pattern = extract_pattern(text)
+
+        # answer_type: LLM-stated or schema-derived
+        if llm_args and llm_args.answer_type in ("list", "count"):
+            is_count = llm_args.answer_type == "count"
+        else:
+            is_count = question.answer_type == AnswerType.NUMERIC
 
         if is_count:
             # Count-questions ask about file extensions, not pattern search.
-            exts = extract_extensions(text)
+            if llm_args and llm_args.extensions:
+                exts = llm_args.extensions
+            else:
+                exts = extract_extensions(text)
             if not exts or offset is None:
                 return AgentResponse(candidates=["0"])
             # Use fls -r -p to enumerate everything, then filter by extension.
@@ -250,22 +301,77 @@ def build_solver(ctx: SigningContext, handles_dir: Path):
 
 
 def main() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="DFIR-Metric NSS benchmark runner.")
+    parser.add_argument(
+        "--live-vertex",
+        action="store_true",
+        help="Use the live Gemini-via-Vertex agent_fn (otherwise deterministic baseline).",
+    )
+    parser.add_argument(
+        "--vertex-model",
+        default=None,
+        help="Override the Gemini model (default: gemini-2.5-flash).",
+    )
+    parser.add_argument(
+        "--vertex-project",
+        default=None,
+        help="Override the GCP project (default: zarda-e0938).",
+    )
+    parser.add_argument(
+        "--run-id",
+        default=None,
+        help="Run ID (auto-derived from mode if omitted).",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Limit to first N questions (smoke testing).",
+    )
+    args = parser.parse_args()
+
     if not CORPUS_PATH.exists():
         print(f"missing corpus: {CORPUS_PATH}", file=sys.stderr)
         return 2
 
     questions, corpus_sha256 = load_nss_corpus(CORPUS_PATH)
+    if args.limit:
+        questions = questions[: args.limit]
     print(f"corpus: {len(questions)} questions, sha256={corpus_sha256[:16]}…", file=sys.stderr)
 
     handles_dir = Path("logs/handles")
     handles_dir.mkdir(parents=True, exist_ok=True)
-    ctx = SigningContext.load_or_mint(Path("keys"), run_id="nss-baseline")
-    solver = build_solver(ctx, handles_dir)
+    run_id = args.run_id or ("nss-vertex" if args.live_vertex else "nss-baseline")
+    ctx = SigningContext.load_or_mint(Path("keys"), run_id=run_id)
+    deterministic = build_solver(ctx, handles_dir)
+
+    if args.live_vertex:
+        from oath.benchmark.gemini_nss_agent import (
+            GeminiNSSConfig,
+            build_gemini_nss_agent_fn,
+        )
+        cfg_kwargs: dict = {}
+        if args.vertex_model:
+            cfg_kwargs["model"] = args.vertex_model
+        if args.vertex_project:
+            cfg_kwargs["project"] = args.vertex_project
+        config = GeminiNSSConfig(**cfg_kwargs)
+        agent_fn = build_gemini_nss_agent_fn(
+            deterministic_executor=deterministic,
+            config=config,
+        )
+        print(f"  live agent: Vertex {config.model} @ {config.project}/{config.location}", file=sys.stderr)
+    else:
+        # Wrap the 3-arg deterministic into a 2-arg BenchmarkAgentFn.
+        def agent_fn(q, k):
+            return deterministic(q, k, None)
 
     harness = BenchmarkHarness(
-        agent_fn=solver,
+        agent_fn=agent_fn,
         k=4,
-        run_id="nss-baseline",
+        run_id=run_id,
         progress_callback=None,
     )
     result = harness.run(questions, corpus_sha256=corpus_sha256)
