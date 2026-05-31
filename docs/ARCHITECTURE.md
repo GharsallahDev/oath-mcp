@@ -35,7 +35,7 @@ OATH is an autonomous DFIR agent built on the SIFT Workstation. Its architecture
                                       │
                                       ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                       Autonomous Agent Loop  (claude --print)                │
+│   Autonomous Agent Loop  (Vertex Gemini 2.5 — args-proposal architecture)    │
 │                                                                              │
 │  for hypothesis in hypotheses:                                               │
 │      claims = propose(hypothesis, evidence)                                  │
@@ -48,6 +48,10 @@ OATH is an autonomous DFIR agent built on the SIFT Workstation. Its architecture
 │              ralph_wiggum_log(claim, verdict.reason)  # visible self-correct │
 │              quarantine(claim, verdict)               # surface to examiner  │
 │              re_propose_with_constraint(verdict.reason)                      │
+│                                                                              │
+│  Live-agent bridges: oath.benchmark.gemini_nss_agent (Vertex AI)             │
+│                      oath.benchmark.claude_nss_agent (Anthropic API)         │
+│  Same args-proposal contract; same verifier semantics; LLM-vendor-agnostic.  │
 └─────────────────────────────────────┬────────────────────────────────────────┘
                                       │
         ┌─────────────────────────────┼─────────────────────────────┐
@@ -58,9 +62,10 @@ OATH is an autonomous DFIR agent built on the SIFT Workstation. Its architecture
 │                    │  │                        │  │                          │
 │  Deterministic     │  │  Wrong hypothesis →    │  │  oath verify <id>        │
 │  re-derivation     │  │  narrated abandonment  │  │  → reproduces evidence   │
-│  via regex /       │  │  → constrained re-     │  │  from original SHA-256   │
-│  YARA / struct-    │  │  proposal              │  │  in seconds, on examiner's  │
-│  parse from        │  │                        │  │  laptop                  │
+│  via multi-enc     │  │  → constrained re-     │  │  from original SHA-256   │
+│  byte-search /     │  │  proposal              │  │  in seconds, on examiner's  │
+│  regex / struct-   │  │                        │  │  laptop                  │
+│  parse from        │  │                        │  │                          │
 │  original SHA-256  │  │                        │  │                          │
 └────────────────────┘  └────────────────────────┘  └──────────────────────────┘
 ```
@@ -106,11 +111,11 @@ Every shipped finding includes a one-line `oath verify <finding-id>` command. Wh
 3. Compares to the recorded value in the signed manifest
 4. Renders the supporting evidence span
 
-Total wall-clock: 5-30 seconds per receipt on commodity hardware. Ships as `verify.sh` in the repo + a Go static binary for cross-platform replay.
+Total wall-clock: 5-30 seconds per receipt on commodity hardware. Ships as `verify.sh` + the `oath verify` Python CLI in the repo. (The earlier "Go static binary" plan turned out to be over-engineering — `pip install oath` + `verify.sh` is enough for examiner-replay; the Go binary added duplicated tool-specific logic in a second language for no real portability gain since the underlying forensic tools are themselves Python/.NET.)
 
 ### 4. DFIR-Metric Public Leaderboard
 
-OATH is scored on the NIST CFTT Module III practical-analysis subset (the [DFIR-Metric](https://arxiv.org/abs/2505.19973) benchmark). Frontier-LLM baseline (GPT-4.1) = **38.5% TUS@4**. OATH target: **>60% with verifier-gated retries**. Leaderboard URL ships with submission; verify.sh ships with submission; methodology fully reproducible.
+OATH is scored on the [DFIR-Metric](https://arxiv.org/abs/2505.19973) Module III NIST String Search corpus (510 questions, the same file the paper authors published). Frontier-LLM baseline (GPT-4.1, published) = **38.5% TUS@4**. OATH deterministic baseline (no LLM) = **62.55% TUS@4**, +24 points. Live-agent (Vertex Gemini + verifier) is the same scoring contract, run reported in `docs/ACCURACY.md`. Methodology, per-question audit, and reproducibility one-liner: see [`docs/ACCURACY.md`](ACCURACY.md).
 
 ## What OATH explicitly does NOT claim
 
