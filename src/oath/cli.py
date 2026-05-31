@@ -2,7 +2,7 @@
 
 The CLI is the thin user-facing surface. The interesting work happens in:
 
-    src/oath/mcp/          — the Custom MCP Server + 12 typed forensic functions
+    src/oath/mcp/          — the Custom MCP Server + 10 typed forensic functions
     src/oath/witness/      — the Witness Oath Verifier + Ralph Wiggum Loop
     src/oath/receipt/      — Notarized<T> envelopes + portable Replay Receipts
     src/oath/agent/        — the autonomous orchestration loop
@@ -113,7 +113,7 @@ def benchmark(module: str, corpus: str, publish: bool) -> None:
 def serve(transport: str, port: int) -> None:
     """Boot the Custom MCP Server so Claude Code can connect to it.
 
-    Exposes 12 typed forensic functions, each returning Notarized<T>.
+    Exposes 10 typed forensic functions, each returning Notarized<T>.
     """
     click.echo(f"[oath serve] transport={transport}  port={port}")
     click.echo("(not yet implemented)", err=True)

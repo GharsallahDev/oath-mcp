@@ -20,12 +20,12 @@ OATH is an autonomous DFIR agent built on the SIFT Workstation. Its architecture
                                               │
                                               ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                       Custom MCP Server (12 typed functions)                 │
+│                       Custom MCP Server (10 typed functions)                 │
 │                                                                              │
-│  parse_evtx     parse_mft       parse_amcache    parse_prefetch              │
-│  parse_registry parse_usnjrnl   run_hayabusa     vol3_query                  │
-│  plaso_supertimeline           extract_kerberos  extract_ntlm_residue        │
-│  enumerate_credential_artifacts                                              │
+│  enumerate_credential_artifacts  ← FIRST CALL: filesystem inventory          │
+│  parse_evtx     parse_mft        parse_amcache    parse_prefetch             │
+│  parse_registry parse_usnjrnl    plaso_supertimeline                         │
+│  run_hayabusa   vol3_query                                                   │
 │                                                                              │
 │  Each returns Notarized<T>:                                                  │
 │     { data, tool_version, args_canonical, stdout_blake3,                     │
