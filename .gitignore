@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.npm/
+
+# Build artifacts
+dist/
+build/
+*.whl
+
+# Local secrets / state
+.env
+.env.local
+*.token
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Forensic corpora (big binaries — pulled by scripts, never committed)
+corpus/
+*.E01
+*.dd
+*.raw
+*.vmem
+*.mem
+*.lime
+*.dmp
+
+# Volatility 3 symbol packs
+symbols/
+
+# Working state
+.pair/
+tmp/
+*.log
+logs/*.jsonl
+
+# Benchmark intermediate output
+benchmarks/runs/
+benchmarks/cache/
+
+# But keep these
+!logs/.gitkeep
+!corpus/.gitkeep
+!symbols/.gitkeep
