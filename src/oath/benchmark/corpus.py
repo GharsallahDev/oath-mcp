@@ -48,33 +48,51 @@ def hash_corpus(questions: list[DfirMetricQuestion]) -> str:
 
 
 def load_corpus(path: Path) -> tuple[list[DfirMetricQuestion], str]:
-    """Load a corpus from a JSONL file (one question per line) or a JSON array.
+    """Load a corpus from any supported shape — auto-detected from the file.
 
-    Returns (questions, corpus_sha256). The corpus is sorted by question_id
-    BEFORE hashing so re-orderings of the input file don't change the hash.
+    Supported shapes:
+      - JSONL: one OATH-native DfirMetricQuestion dict per line
+      - JSON array: a list of OATH-native dicts
+      - DFIR-Metric paper format: top-level `{"questions": [...]}` — routed
+        to `load_nss_corpus` (handles both list-answer and scalar-answer
+        entries in the mixed NSS file).
+
+    Returns (questions, corpus_sha256). Question IDs are sorted before
+    hashing so file ordering doesn't change the hash.
     """
     text = path.read_text(encoding="utf-8").strip()
     if not text:
         return [], hash_corpus([])
 
+    # Try to parse the whole file as a single JSON document first. If it
+    # succeeds AND looks like the DFIR-Metric NSS shape, route there. If
+    # it succeeds as a list, treat as a JSON array of OATH-native dicts.
+    # If parsing fails, fall back to JSONL (one OATH-native dict per line).
+    try:
+        whole = json.loads(text)
+    except json.JSONDecodeError:
+        whole = None
+
     questions: list[DfirMetricQuestion] = []
-    if text.startswith("["):
-        # JSON array form.
-        for raw in json.loads(text):
+    if isinstance(whole, dict) and isinstance(whole.get("questions"), list):
+        return load_nss_corpus(path)
+    if isinstance(whole, list):
+        for raw in whole:
             questions.append(DfirMetricQuestion.model_validate(raw))
-    else:
-        # JSONL form: one question per non-empty line.
-        for lineno, line in enumerate(text.splitlines(), start=1):
-            stripped = line.strip()
-            if not stripped:
-                continue
-            try:
-                raw = json.loads(stripped)
-            except json.JSONDecodeError as e:
-                raise ValueError(
-                    f"corpus line {lineno} is not valid JSON: {e.msg}"
-                ) from e
-            questions.append(DfirMetricQuestion.model_validate(raw))
+        return questions, hash_corpus(questions)
+
+    # JSONL fallback.
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        try:
+            raw = json.loads(stripped)
+        except json.JSONDecodeError as e:
+            raise ValueError(
+                f"corpus line {lineno} is not valid JSON: {e.msg}"
+            ) from e
+        questions.append(DfirMetricQuestion.model_validate(raw))
 
     return questions, hash_corpus(questions)
 
@@ -102,6 +120,26 @@ def filter_by_image(
 # --------------------------------------------------------------------------- #
 
 
+_NUMERIC_RE = "^-?\\d+(?:\\.\\d+)?$"
+
+
+def _infer_scalar_answer_type(answer: str) -> AnswerType:
+    """Pick an AnswerType for a bare-string answer in the DFIR-Metric corpus.
+
+    The NSS file mixes two shapes: string-search list answers (which become
+    NSS_INODE_FILENAME_LIST) and scalar-answer questions tail-spliced in
+    (counts, identifiers, paths). For scalar answers we pick:
+      - NUMERIC if the answer parses as int/float
+      - STRING_CI otherwise (case-insensitive exact match)
+    """
+    import re
+
+    s = answer.strip()
+    if re.fullmatch(_NUMERIC_RE, s):
+        return AnswerType.NUMERIC
+    return AnswerType.STRING_CI
+
+
 def load_nss_corpus(
     path: Path,
     *,
@@ -110,17 +148,20 @@ def load_nss_corpus(
 ) -> tuple[list[DfirMetricQuestion], str]:
     """Load the DFIR-Metric Module III NSS file.
 
-    Format:
-      { "questions": [ { "question": "...", "answer": ["122150:foo.txt", ...] }, ... ] }
+    The file mixes two answer shapes — the loader handles both:
+      list-of-strings  → NSS_INODE_FILENAME_LIST (canonical JSON array)
+      scalar string    → NUMERIC (if it parses as a number) else STRING_CI
+
+    Top-level shape:
+      { "questions": [ { "question": "...", "answer": <list-or-string> }, ... ] }
 
     Each entry becomes a DfirMetricQuestion with:
       - question_id: f"{question_id_prefix}-{ordinal:04d}"
-      - answer_type: NSS_INODE_FILENAME_LIST
-      - expected_answer: canonical JSON-array of the answer list
+      - answer_type: per the rule above
+      - expected_answer: canonical-JSON for list answers, stripped string otherwise
 
-    If `image_sha256` is provided, every question is bound to it (use this
-    once you've computed the SHA-256 of the NIST CFTT image the corpus was
-    generated from); otherwise image_sha256 stays None.
+    If `image_sha256` is provided, every question is bound to it; otherwise
+    image_sha256 stays None.
     """
     raw = json.loads(path.read_text(encoding="utf-8"))
     entries = raw.get("questions") if isinstance(raw, dict) else None
@@ -137,22 +178,33 @@ def load_nss_corpus(
         answer = entry.get("answer")
         if not isinstance(text, str) or not text.strip():
             raise ValueError(f"{path}: entry {i} has no 'question' string.")
-        if not isinstance(answer, list) or not all(isinstance(x, str) for x in answer):
+
+        if isinstance(answer, list):
+            if not all(isinstance(x, str) for x in answer):
+                raise ValueError(
+                    f"{path}: entry {i} list 'answer' must contain only strings."
+                )
+            payload = json.dumps(
+                sorted(answer), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+            )
+            answer_type = AnswerType.NSS_INODE_FILENAME_LIST
+        elif isinstance(answer, (str, int, float)):
+            scalar = str(answer).strip()
+            if not scalar:
+                raise ValueError(f"{path}: entry {i} has empty scalar 'answer'.")
+            payload = scalar
+            answer_type = _infer_scalar_answer_type(scalar)
+        else:
             raise ValueError(
-                f"{path}: entry {i} 'answer' must be a list of strings."
+                f"{path}: entry {i} 'answer' must be a list or scalar; got {type(answer).__name__}."
             )
 
-        # Canonical JSON-array payload: sorted to make set-equality scoring
-        # robust against accidental ordering in the corpus file.
-        payload = json.dumps(
-            sorted(answer), sort_keys=True, separators=(",", ":"), ensure_ascii=False
-        )
         questions.append(
             DfirMetricQuestion(
                 question_id=f"{question_id_prefix}-{i:04d}",
                 image_sha256=image_sha256,
                 question_text=text,
-                answer_type=AnswerType.NSS_INODE_FILENAME_LIST,
+                answer_type=answer_type,
                 expected_answer=payload,
                 module="III",
                 case_label="DFIR-Metric-NSS",

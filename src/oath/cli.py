@@ -68,24 +68,110 @@ def triage(hypothesis: tuple[str, ...], handle: str) -> None:
 
 
 @main.command()
-@click.argument("finding_id")
+@click.argument("envelope_id", required=False)
 @click.option(
-    "--receipt-dir",
-    default="./logs/receipts",
-    help="Directory containing the Notarized receipts.",
+    "--logs-dir",
+    type=click.Path(file_okay=False),
+    default="./logs",
+    show_default=True,
+    help="Logs directory containing envelopes/ + handles/ subdirs.",
 )
-def verify(finding_id: str, receipt_dir: str) -> None:
-    """Re-derive a single finding from the original image.
+@click.option(
+    "--kwargs",
+    "kwargs_json",
+    default=None,
+    help=(
+        "JSON object of per-envelope reverify kwargs (e.g. "
+        '\'{"evtx_path": "/mnt/ev/Security.evtx"}\'). When omitted, '
+        "the verifier infers paths from args_canonical."
+    ),
+)
+def verify(envelope_id: str | None, logs_dir: str, kwargs_json: str | None) -> None:
+    """Re-derive an envelope from the original-image SHA-256.
 
-    Replays the recorded tool invocation against the original-image SHA-256,
-    recomputes the BLAKE3 hash of the output, and compares it to the signed
-    receipt. Outputs PASS / FAIL with the supporting evidence span on PASS.
+    Replays the recorded tool invocation, recomputes BLAKE3 of stdout,
+    compares to the signed receipt. Designed to run on any analyst's
+    commodity laptop in under a minute, with no LLM and no MCP.
 
-    Designed to run on any analyst's commodity laptop in under 60 seconds.
+    With no argument, lists known envelope IDs in --logs-dir.
     """
-    click.echo(f"[oath verify] finding={finding_id}  receipts={receipt_dir}")
-    click.echo("(not yet implemented)", err=True)
-    sys.exit(2)
+    from pathlib import Path
+    import json as _json
+
+    logs = Path(logs_dir)
+    envelopes_dir = logs / "envelopes"
+    if not envelopes_dir.exists():
+        click.echo(f"No envelopes/ under {logs_dir}.", err=True)
+        sys.exit(2)
+
+    if envelope_id is None:
+        ids = sorted(p.stem for p in envelopes_dir.glob("*.json"))
+        if not ids:
+            click.echo("(no envelopes recorded)")
+            return
+        click.echo("Known envelope IDs:")
+        for eid in ids:
+            click.echo(f"  {eid}")
+        return
+
+    target = envelopes_dir / f"{envelope_id}.json"
+    if not target.exists():
+        click.echo(f"envelope not found: {target}", err=True)
+        sys.exit(2)
+
+    from oath.receipt.notarized import Notarized
+    from oath.witness.verifier import default_registry
+
+    raw = _json.loads(target.read_text(encoding="utf-8"))
+    envelope = Notarized.model_validate(raw)
+
+    # Resolve per-envelope kwargs. Two sources, merged left-to-right:
+    #   (a) inferred from envelope.header.args_canonical (paths the tool
+    #       recorded at mint time — usually correct on the same host)
+    #   (b) explicit overrides from --kwargs (for cross-host replay)
+    inferred: dict[str, object] = {}
+    try:
+        args = _json.loads(envelope.header.args_canonical)
+    except Exception:  # noqa: BLE001 — best-effort
+        args = {}
+
+    # Common pattern: tool-author records its primary artifact path under a
+    # _path or _dir-suffixed key. Map those onto the reverify kwarg names.
+    PATH_KEYS = {
+        "evtx_path", "mft_path", "amcache_path", "prefetch_dir",
+        "hive_path", "plugins_dir", "j_path", "plaso_path",
+        "memdump_path", "evtx_dir", "rules_dir", "mount_point",
+        "image_path",
+    }
+    for k in PATH_KEYS:
+        if k in args and args[k] is not None:
+            inferred[k] = Path(str(args[k]))
+
+    if kwargs_json:
+        try:
+            overrides = _json.loads(kwargs_json)
+        except _json.JSONDecodeError as e:
+            click.echo(f"--kwargs is not valid JSON: {e.msg}", err=True)
+            sys.exit(2)
+        for k, v in overrides.items():
+            if isinstance(v, str) and (k.endswith("_path") or k.endswith("_dir") or k == "mount_point"):
+                inferred[k] = Path(v)
+            else:
+                inferred[k] = v
+
+    registry = default_registry()
+    ok, reason = registry.call(envelope, inferred)
+
+    if ok:
+        click.echo(f"PASS  {envelope_id}")
+        click.echo(f"  tool        : {envelope.header.tool_name} {envelope.header.tool_version}")
+        click.echo(f"  image       : {envelope.header.image_sha256[:16]}…")
+        click.echo(f"  stdout_blake3: {envelope.header.stdout_blake3[:16]}…")
+        sys.exit(0)
+    else:
+        click.echo(f"FAIL  {envelope_id}")
+        click.echo(f"  reason      : {reason}")
+        sys.exit(1)
 
 
 @main.command()

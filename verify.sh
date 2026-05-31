@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
 # OATH — verify.sh
 #
-# One-line judge verifier. Re-runs a single finding's Replay Receipt on the
-# original-image SHA-256 and proves the supporting evidence reproduces
-# deterministically. Designed to run on a judge's laptop in <60 seconds.
+# One-line examiner verifier. Re-runs a single finding's Replay Receipt
+# against the original-image SHA-256 and confirms the supporting evidence
+# reproduces deterministically. Designed to run on an analyst's commodity
+# laptop in well under a minute.
 #
 # Usage:
-#   ./verify.sh                          # interactive picker
-#   ./verify.sh <finding-id>             # specific finding
-#   ./verify.sh dfir-metric-case-42      # specific DFIR-Metric benchmark case
+#   ./verify.sh                          # list known envelopes
+#   ./verify.sh <envelope-id>            # verify one envelope
+#   ./verify.sh --logs-dir <path> <envelope-id>
 #
-# Requires: docker (for sandboxed tool execution) OR direct vol3/eztools install.
+# Requires: a Python interpreter and the OATH package (no LLM, no MCP).
 
 set -euo pipefail
 
