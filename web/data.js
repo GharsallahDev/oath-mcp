@@ -1,0 +1,412 @@
+window.OATH_DATA = {
+  "case": {
+    "name": "CFReDS Data Leakage Case",
+    "image_filename": "cfreds_2015_data_leakage_pc.E01..E04",
+    "image_sha256": "e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9",
+    "image_size_bytes": 2147463521,
+    "summary_md": "# OATH sample-run against NIST CFReDS Data Leakage Case\n\n- Image: `cfreds_2015_data_leakage_pc.E01..E04`\n- Image SHA-256: `e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9`\n- Image size: 2,147,463,521 bytes\n- Run id: `dlc-sample-run`\n- Mount tech: raw-file\n\n## Findings\n\n\u2713 **parse_evtx (Security.evtx, auth events)** \u2014 274 records \u00b7 envelope `456064f60c24fd0c...`\n\u2713 **parse_registry (SAM hive \u2014 accounts)** \u2014 20 findings (incl. suspect 'informant' RID 1000) \u00b7 envelope `7f6f31d7cb8d319b...`\n\u2713 **parse_mft (full $MFT, filter='informant')** \u2014 5,347 entries \u00b7 envelope `623fef699579cdd3...`\n\u2713 **parse_usnjrnl ($J, FileDelete, filter='informant')** \u2014 69 delete events for 'informant' \u00b7 28 Outlook OST temp files with suspect email \u00b7 envelope `9b3d1e734d20a685...`\n\u2713 **run_hayabusa (3 EVTX files, level=high)** \u2014 4 high+ Sigma hits \u2014 ATT&CK techniques: T1098, T1543.003 \u00b7 envelope `af57e4465435eb2a...`\n\n## Chain of custody\n\nEach envelope above is signed (ed25519) and chains to the previous via a BLAKE3 prev-hash link. Examiners can re-derive any envelope from this run with:\n\n```bash\noath verify <envelope-id>\n```\n\n## Reproducing this run\n\n```bash\n# After installing OATH (scripts/install-tools.sh or scripts/install-on-sift.sh):\noath mount path/to/cfreds_2015_data_leakage_pc.E01\n# Extract evidence files via icat (see docs/DATASETS.md for the inode list)\npython scripts/export_sample_run.py --handle-id <id-from-oath-mount>\n```"
+  },
+  "envelopes": [
+    {
+      "envelope_id": "456064f60c24fd0c532fa8c6b2ed41c9bfc57c34027c99ca6026fc91b65a051d",
+      "tool_name": "parse_evtx",
+      "tool_version": "2026.5.0",
+      "image_sha256": "e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9",
+      "stdout_blake3": "cf3071c25b0e7bdf3700503307be06e693b97f117c0abfdb1efbe54e860ce233",
+      "args_canonical": "{\"channel\":null,\"event_ids\":[4624,4625,4634,4647,4672,4768,4769,4776],\"evtx_image_offset\":0,\"evtx_path\":\"/tmp/oath-dlc/Security.evtx\",\"time_range\":null,\"user_sid\":null}",
+      "prev": null,
+      "ts": 1780338368.823082,
+      "run_id": "dlc-sample-run",
+      "signature": "ZpbDoraffeTZBk2EZoZ40ak1ZnPhOZ-U...",
+      "n_records": 274,
+      "verdict": "VERIFIED",
+      "sample_data": [
+        {
+          "record_number": 2,
+          "timestamp": "2015-03-25 10:15:35.3112700",
+          "event_id": 4624,
+          "level": "LogAlways",
+          "provider": "Microsoft-Windows-Security-Auditing",
+          "channel": "Security",
+          "computer": "37L4247F27-25",
+          "user_name": "SYSTEM",
+          "user_sid": "S-1-5-18",
+          "logon_type": null,
+          "auth_package": "-",
+          "source_ip": "-",
+          "payload_summary": "{\"EventData\":{\"Data\":[{\"@Name\":\"SubjectUserSid\",\"#text\":\"S-1-0-0\"},{\"@Name\":\"SubjectUserName\",\"#text\":\"-\"},{\"@Name\":\"SubjectDomainName\",\"#text\":\"-\"},{\"@Name\":\"SubjectLogonId\",\"#text\":\"0x0\"},{\"@Name\":\"TargetUserSid\",\"#text\":\"S-1-5-18\"},{\"@Name\":\"TargetUserName\",\"#text\":\"SYSTEM\"},{\"@Name\":\"TargetDomainName\",\"#text\":\"NT AUTHORITY\"},{\"@Name\":\"TargetLogonId\",\"#text\":\"0x3E7\"},{\"@Name\":\"LogonType\",\"#text\":\"0\"},{\"@Name\":\"LogonProcessName\",\"#text\":\"-\"},{\"@Name\":\"AuthenticationPackageName\",\"#text\":\"-\"},{\"@Name\":\"WorkstationName\",\"#text\":\"-\"},{\"@Name\":\"LogonGuid\",\"#text\":\"00000000-0000-0000-0000-000000000000\"},{\"@Name\":\"TransmittedServices\",\"#text\":\"-\"},{\"@Name\":\"LmPackageName\",\"#text\":\"-\"},{\"@Name\":\"KeyLength\",\"#text\":\"0\"},{\"@Name\":\"ProcessId\",\"#text\":\"0x4\"},{\"@Name\":\"ProcessName\"},{\"@Name\":\"IpAddress\",\"#text\":\"-\"},{\"@Name\":\"IpPort\",\"#text\":\"-\"}]}}",
+          "source_evtx_offset": 0,
+          "record_offset": 0,
+          "record_length": 4096
+        },
+        {
+          "record_number": 16,
+          "timestamp": "2015-03-25 10:15:37.7136742",
+          "event_id": 4624,
+          "level": "LogAlways",
+          "provider": "Microsoft-Windows-Security-Auditing",
+          "channel": "Security",
+          "computer": "37L4247F27-25",
+          "user_name": "SYSTEM",
+          "user_sid": "S-1-5-18",
+          "logon_type": 5,
+          "auth_package": "Negotiate",
+          "source_ip": "-",
+          "payload_summary": "{\"EventData\":{\"Data\":[{\"@Name\":\"SubjectUserSid\",\"#text\":\"S-1-5-18\"},{\"@Name\":\"SubjectUserName\",\"#text\":\"37L4247F27-25$\"},{\"@Name\":\"SubjectDomainName\",\"#text\":\"WORKGROUP\"},{\"@Name\":\"SubjectLogonId\",\"#text\":\"0x3E7\"},{\"@Name\":\"TargetUserSid\",\"#text\":\"S-1-5-18\"},{\"@Name\":\"TargetUserName\",\"#text\":\"SYSTEM\"},{\"@Name\":\"TargetDomainName\",\"#text\":\"NT AUTHORITY\"},{\"@Name\":\"TargetLogonId\",\"#text\":\"0x3E7\"},{\"@Name\":\"LogonType\",\"#text\":\"5\"},{\"@Name\":\"LogonProcessName\",\"#text\":\"Advapi  \"},{\"@Name\":\"AuthenticationPackageName\",\"#text\":\"Negotiate\"},{\"@Name\":\"WorkstationName\"},{\"@Name\":\"LogonGuid\",\"#text\":\"00000000-0000-0000-0000-000000000000\"},{\"@Name\":\"TransmittedServices\",\"#text\":\"-\"},{\"@Name\":\"LmPackageName\",\"#text\":\"-\"},{\"@Name\":\"KeyLength\",\"#text\":\"0\"},{\"@Name\":\"ProcessId\",\"#text\":\"0x1C4\"},{\"@Name\":\"ProcessName\",\"#text\":\"C:\\\\Windows\\\\System32\\\\services.exe\"},{\"@Name\":\"IpAddress\",\"#text\":\"-\"},{\"@Name\":\"IpPort\",\"#text\":\"-\"}]}}",
+          "source_evtx_offset": 0,
+          "record_offset": 4096,
+          "record_length": 4096
+        },
+        {
+          "record_number": 17,
+          "timestamp": "2015-03-25 10:15:37.7136742",
+          "event_id": 4672,
+          "level": "LogAlways",
+          "provider": "Microsoft-Windows-Security-Auditing",
+          "channel": "Security",
+          "computer": "37L4247F27-25",
+          "user_name": "SYSTEM",
+          "user_sid": "S-1-5-18",
+          "logon_type": null,
+          "auth_package": null,
+          "source_ip": null,
+          "payload_summary": "{\"EventData\":{\"Data\":[{\"@Name\":\"SubjectUserSid\",\"#text\":\"S-1-5-18\"},{\"@Name\":\"SubjectUserName\",\"#text\":\"SYSTEM\"},{\"@Name\":\"SubjectDomainName\",\"#text\":\"NT AUTHORITY\"},{\"@Name\":\"SubjectLogonId\",\"#text\":\"0x3E7\"},{\"@Name\":\"PrivilegeList\",\"#text\":\"SeAssignPrimaryTokenPrivilege, SeTcbPrivilege, SeSecurityPrivilege, SeTakeOwnershipPrivilege, SeLoadDriverPrivilege, SeBackupPrivilege, SeRestorePrivilege, SeDebugPrivilege, SeAuditPrivilege, SeSystemEnvironmentPrivilege, SeImpersonatePrivilege\"}]}}",
+          "source_evtx_offset": 0,
+          "record_offset": 8192,
+          "record_length": 4096
+        }
+      ]
+    },
+    {
+      "envelope_id": "7f6f31d7cb8d319be9de78aad56b283625aae567871b9f5caaef4fb3ddbe8fc9",
+      "tool_name": "parse_registry",
+      "tool_version": "2026.5.0",
+      "image_sha256": "e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9",
+      "stdout_blake3": "f5499d1aa8137e9d8cf2bbc09536e3bb48470255fa25c77f9a697aeb4733b4b9",
+      "args_canonical": "{\"hive_image_offset\":0,\"hive_label\":\"SAM\",\"hive_path\":\"/tmp/oath-dlc/SAM\",\"plugin_filter\":null,\"plugin_pack_sha256\":\"62fae253a4e12da9910d1d894b6f95ac930ae9e2abaf8f12948e51dbd933fdac\",\"plugins_dir\":\"/Users/gharsallah/Desktop/RED/.oath-tools/eztools/net9/RECmd/BatchExamples\"}",
+      "prev": "456064f60c24fd0c532fa8c6b2ed41c9bfc57c34027c99ca6026fc91b65a051d",
+      "ts": 1780338369.172468,
+      "run_id": "dlc-sample-run",
+      "signature": "CE7aDRZ95f6LXNTDj1e6CNqEh5okTy2d...",
+      "n_records": 20,
+      "verdict": "VERIFIED",
+      "sample_data": [
+        {
+          "plugin": "User Accounts (SAM)",
+          "hive": "SAM",
+          "key_path": "CMI-CreateHive{C4E7BA2B-68E8-499C-B1A1-371AC8D717C7}\\SAM\\Domains\\Account\\Users",
+          "value_name": "V",
+          "value_data": "Username: Administrator Id: 500 ValidUserId: True",
+          "last_write_ts": "2015-03-22 15:53:01.9000353",
+          "raw": {
+            "HivePath": "/tmp/oath-dlc/SAM",
+            "HiveType": "Sam",
+            "Description": "User Accounts (SAM)",
+            "Category": "User Accounts",
+            "KeyPath": "CMI-CreateHive{C4E7BA2B-68E8-499C-B1A1-371AC8D717C7}\\SAM\\Domains\\Account\\Users",
+            "ValueName": "V",
+            "ValueType": "(plugin)",
+            "ValueData": "Username: Administrator Id: 500 ValidUserId: True",
+            "ValueData2": "Created: 2015-03-25 10:33:22.8643375 Last login: 2010-11-21 03:47:20.9452429 Last password change: 2010-11-21 03:57:24.7150555 Last incorrect password:  Expires on: ",
+            "ValueData3": "Account flags: AccountDisabled, NormalUserAccount, PasswordDoesNotExpire",
+            "Comment": "User accounts in SAM hive",
+            "Recursive": "False",
+            "Deleted": "False",
+            "LastWriteTimestamp": "2015-03-22 15:53:01.9000353",
+            "PluginDetailFile": "/tmp/claude-501/oath-recmd-g78uuvww/20260601182608/recmd_UserAccounts.csv"
+          },
+          "hive_image_offset": 0
+        },
+        {
+          "plugin": "User Accounts (SAM)",
+          "hive": "SAM",
+          "key_path": "CMI-CreateHive{C4E7BA2B-68E8-499C-B1A1-371AC8D717C7}\\SAM\\Domains\\Account\\Users",
+          "value_name": "V",
+          "value_data": "Username: Guest Id: 501 ValidUserId: True",
+          "last_write_ts": "2015-03-22 15:53:01.9000353",
+          "raw": {
+            "HivePath": "/tmp/oath-dlc/SAM",
+            "HiveType": "Sam",
+            "Description": "User Accounts (SAM)",
+            "Category": "User Accounts",
+            "KeyPath": "CMI-CreateHive{C4E7BA2B-68E8-499C-B1A1-371AC8D717C7}\\SAM\\Domains\\Account\\Users",
+            "ValueName": "V",
+            "ValueType": "(plugin)",
+            "ValueData": "Username: Guest Id: 501 ValidUserId: True",
+            "ValueData2": "Created: 2015-03-25 10:33:22.8643375 Last login:  Last password change:  Last incorrect password:  Expires on: ",
+            "ValueData3": "Account flags: AccountDisabled, PasswordNotRequired, NormalUserAccount, PasswordDoesNotExpire",
+            "Comment": "User accounts in SAM hive",
+            "Recursive": "False",
+            "Deleted": "False",
+            "LastWriteTimestamp": "2015-03-22 15:53:01.9000353",
+            "PluginDetailFile": "/tmp/claude-501/oath-recmd-g78uuvww/20260601182608/recmd_UserAccounts.csv"
+          },
+          "hive_image_offset": 0
+        },
+        {
+          "plugin": "User Accounts (SAM)",
+          "hive": "SAM",
+          "key_path": "CMI-CreateHive{C4E7BA2B-68E8-499C-B1A1-371AC8D717C7}\\SAM\\Domains\\Account\\Users",
+          "value_name": "V",
+          "value_data": "Username: informant Id: 1000 ValidUserId: True",
+          "last_write_ts": "2015-03-22 15:53:01.9000353",
+          "raw": {
+            "HivePath": "/tmp/oath-dlc/SAM",
+            "HiveType": "Sam",
+            "Description": "User Accounts (SAM)",
+            "Category": "User Accounts",
+            "KeyPath": "CMI-CreateHive{C4E7BA2B-68E8-499C-B1A1-371AC8D717C7}\\SAM\\Domains\\Account\\Users",
+            "ValueName": "V",
+            "ValueType": "(plugin)",
+            "ValueData": "Username: informant Id: 1000 ValidUserId: True",
+            "ValueData2": "Created: 2015-03-22 14:33:54.4226020 Last login: 2015-03-25 14:45:59.1802055 Last password change: 2015-03-22 14:33:54.4850021 Last incorrect password: 2015-03-25 14:45:43.7674055 Expires on: ",
+            "ValueData3": "Account flags: PasswordNotRequired, NormalUserAccount, PasswordDoesNotExpire",
+            "Comment": "User accounts in SAM hive",
+            "Recursive": "False",
+            "Deleted": "False",
+            "LastWriteTimestamp": "2015-03-22 15:53:01.9000353",
+            "PluginDetailFile": "/tmp/claude-501/oath-recmd-g78uuvww/20260601182608/recmd_UserAccounts.csv"
+          },
+          "hive_image_offset": 0
+        }
+      ]
+    },
+    {
+      "envelope_id": "623fef699579cdd35270a23a367319cefa4d7560abe16dc753b8b008edb8d043",
+      "tool_name": "parse_mft",
+      "tool_version": "2026.5.0",
+      "image_sha256": "e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9",
+      "stdout_blake3": "dcc32e8c8619bb5734de3d42256606a68aa77c7ee34727c480d69fa6918ad1cd",
+      "args_canonical": "{\"filter_path\":\"informant\",\"mft_image_offset\":0,\"mft_path\":\"/tmp/oath-dlc/MFT\",\"since\":null}",
+      "prev": "7f6f31d7cb8d319be9de78aad56b283625aae567871b9f5caaef4fb3ddbe8fc9",
+      "ts": 1780338370.8150258,
+      "run_id": "dlc-sample-run",
+      "signature": "RrzP9VP5EBWjwQ7axrxopa0laxCZUyHi...",
+      "n_records": 5347,
+      "verdict": "VERIFIED",
+      "sample_data": [
+        {
+          "entry_number": 55,
+          "sequence_number": 11,
+          "parent_entry_number": 62973,
+          "parent_sequence_number": 6,
+          "in_use": true,
+          "is_directory": false,
+          "file_name": "bing_p_lg[1].ico",
+          "file_extension": ".ico",
+          "full_path": ".\\Users\\informant\\AppData\\Local\\Microsoft\\Windows\\Temporary Internet Files\\Content.IE5\\VFR0LDE1\\bing_p_lg[1].ico",
+          "file_size": 4286,
+          "si_created": "2015-03-23 17:28:18.7496057",
+          "si_modified": "2015-03-23 17:28:18.7808058",
+          "si_accessed": "2015-03-23 17:28:18.7496057",
+          "si_record_modified": "2015-03-23 17:28:18.7808058",
+          "fn_created": null,
+          "fn_modified": "2015-03-23 17:28:18.7496057",
+          "fn_accessed": null,
+          "fn_record_modified": "2015-03-23 17:28:18.7496057",
+          "has_alternate_data_streams": false,
+          "has_object_id": false,
+          "has_reparse_point": false,
+          "mft_image_offset": 0,
+          "entry_offset_in_mft": 56320
+        },
+        {
+          "entry_number": 429,
+          "sequence_number": 7,
+          "parent_entry_number": 550,
+          "parent_sequence_number": 2,
+          "in_use": true,
+          "is_directory": false,
+          "file_name": "CVR2C7C.tmp.cvr",
+          "file_extension": ".cvr",
+          "full_path": ".\\Users\\informant\\AppData\\Local\\Temp\\CVR2C7C.tmp.cvr",
+          "file_size": 0,
+          "si_created": "2015-03-23 17:26:12.3080441",
+          "si_modified": "2015-03-23 17:26:12.3080441",
+          "si_accessed": "2015-03-23 17:26:12.3080441",
+          "si_record_modified": "2015-03-23 17:26:12.3080441",
+          "fn_created": null,
+          "fn_modified": null,
+          "fn_accessed": null,
+          "fn_record_modified": null,
+          "has_alternate_data_streams": false,
+          "has_object_id": false,
+          "has_reparse_point": false,
+          "mft_image_offset": 0,
+          "entry_offset_in_mft": 439296
+        },
+        {
+          "entry_number": 514,
+          "sequence_number": 2,
+          "parent_entry_number": 486,
+          "parent_sequence_number": 1,
+          "in_use": true,
+          "is_directory": true,
+          "file_name": "informant",
+          "file_extension": null,
+          "full_path": ".\\Users\\informant",
+          "file_size": 0,
+          "si_created": "2015-03-22 14:34:31.4338934",
+          "si_modified": "2015-03-23 20:05:32.2184979",
+          "si_accessed": "2015-03-23 20:05:32.2184979",
+          "si_record_modified": "2015-03-23 20:05:32.2184979",
+          "fn_created": null,
+          "fn_modified": "2015-03-22 14:34:31.4338934",
+          "fn_accessed": "2015-03-22 14:34:31.4338934",
+          "fn_record_modified": "2015-03-22 14:34:31.4338934",
+          "has_alternate_data_streams": false,
+          "has_object_id": false,
+          "has_reparse_point": false,
+          "mft_image_offset": 0,
+          "entry_offset_in_mft": 526336
+        }
+      ]
+    },
+    {
+      "envelope_id": "9b3d1e734d20a6856f85ad4538dbf926f9bd437897db4902e2e140bd8fce1277",
+      "tool_name": "parse_usnjrnl",
+      "tool_version": "2026.5.0",
+      "image_sha256": "e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9",
+      "stdout_blake3": "400a87626275f1348c4742ec206997e473aaef59a60d849d8ac733bab3ca2251",
+      "args_canonical": "{\"filter_path\":\"informant\",\"j_image_offset\":0,\"j_path\":\"/tmp/oath-dlc/UsnJrnl-J\",\"reason_filter\":[\"FileDelete\"],\"since\":null}",
+      "prev": "623fef699579cdd35270a23a367319cefa4d7560abe16dc753b8b008edb8d043",
+      "ts": 1780338372.6441758,
+      "run_id": "dlc-sample-run",
+      "signature": "nWk6QLkaiFn3714D_fHhJ8bbBwKscWYe...",
+      "n_records": 69,
+      "verdict": "VERIFIED",
+      "sample_data": [
+        {
+          "timestamp": "2015-03-22 15:48:21.3417368",
+          "usn": 44874984,
+          "update_reasons": [
+            "FileDelete",
+            "Close"
+          ],
+          "file_name": "~iaman.informant@nist.gov.ost.tmp",
+          "file_extension": ".tmp",
+          "full_path": "~iaman.informant@nist.gov.ost.tmp",
+          "file_record_number": 46256,
+          "file_record_sequence_number": 3,
+          "parent_file_record_number": 22232,
+          "parent_file_record_sequence_number": 3,
+          "source_info": null,
+          "security_id": null,
+          "j_image_offset": 0,
+          "record_offset_in_j": 6655584
+        },
+        {
+          "timestamp": "2015-03-22 15:48:21.3417368",
+          "usn": 44875368,
+          "update_reasons": [
+            "FileDelete",
+            "Close"
+          ],
+          "file_name": "~iaman.informant@nist.gov.ost.tmp",
+          "file_extension": ".tmp",
+          "full_path": "~iaman.informant@nist.gov.ost.tmp",
+          "file_record_number": 46256,
+          "file_record_sequence_number": 4,
+          "parent_file_record_number": 22232,
+          "parent_file_record_sequence_number": 3,
+          "source_info": null,
+          "security_id": null,
+          "j_image_offset": 0,
+          "record_offset_in_j": 6655872
+        },
+        {
+          "timestamp": "2015-03-22 15:48:21.3417368",
+          "usn": 44875776,
+          "update_reasons": [
+            "FileDelete",
+            "Close"
+          ],
+          "file_name": "~iaman.informant@nist.gov.ost.tmp",
+          "file_extension": ".tmp",
+          "full_path": "~iaman.informant@nist.gov.ost.tmp",
+          "file_record_number": 46256,
+          "file_record_sequence_number": 5,
+          "parent_file_record_number": 22232,
+          "parent_file_record_sequence_number": 3,
+          "source_info": null,
+          "security_id": null,
+          "j_image_offset": 0,
+          "record_offset_in_j": 6656160
+        }
+      ]
+    },
+    {
+      "envelope_id": "af57e4465435eb2ae273863870b32ba2ed0442dd264cfb1fa8749005e094105d",
+      "tool_name": "run_hayabusa",
+      "tool_version": "3.9.0",
+      "image_sha256": "e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9",
+      "stdout_blake3": "0a963bbbf752ff108ffc8c989e8f46b6e6e011bc62616eb433a6b6f5a3096deb",
+      "args_canonical": "{\"evtx_dir\":\"/tmp/oath-dlc/EVTX\",\"evtx_image_offset\":0,\"min_level\":\"high\",\"rules_corpus_sha256\":\"afa370bbe2550879e1123baebfd3a8ac8db293d6d4caf5e56d822e17c36304cc\",\"rules_dir\":\"/Users/gharsallah/Desktop/RED/.oath-tools/hayabusa/rules\",\"technique_filter\":null}",
+      "prev": "9b3d1e734d20a6856f85ad4538dbf926f9bd437897db4902e2e140bd8fce1277",
+      "ts": 1780338374.362464,
+      "run_id": "dlc-sample-run",
+      "signature": "UogBWNkX1BPKfMLSL7RWvK6wGqm7vkiJ...",
+      "n_records": 4,
+      "verdict": "VERIFIED",
+      "sample_data": [
+        {
+          "timestamp": "2015-03-22 15:33:54.453 +01:00",
+          "computer": "informant-PC",
+          "channel": "Sec",
+          "event_id": 4732,
+          "level": "high",
+          "rule_id": "611e2e76-a28f-4255-812c-eb8836b2f5bb",
+          "rule_title": "User Added To Local Admin Grp",
+          "rule_author": "Zach Mathis",
+          "mitre_tactics": [
+            "Persis"
+          ],
+          "mitre_techniques": [
+            "T1098"
+          ],
+          "status": "stable",
+          "record_id": 115,
+          "details": "SrcSID: S-1-5-21-2425377081-3129163575-2985601102-1000 \u00a6 TgtGrp: Administrators \u00a6 LID: 0x3e7"
+        },
+        {
+          "timestamp": "2015-03-22 16:51:54.617 +01:00",
+          "computer": "informant-PC",
+          "channel": "Sec",
+          "event_id": 4732,
+          "level": "high",
+          "rule_id": "611e2e76-a28f-4255-812c-eb8836b2f5bb",
+          "rule_title": "User Added To Local Admin Grp",
+          "rule_author": "Zach Mathis",
+          "mitre_tactics": [
+            "Persis"
+          ],
+          "mitre_techniques": [
+            "T1098"
+          ],
+          "status": "stable",
+          "record_id": 989,
+          "details": "SrcSID: S-1-5-21-2425377081-3129163575-2985601102-1001 \u00a6 TgtGrp: Administrators \u00a6 LID: 0x224e3"
+        },
+        {
+          "timestamp": "2015-03-22 16:52:30.805 +01:00",
+          "computer": "informant-PC",
+          "channel": "Sec",
+          "event_id": 4732,
+          "level": "high",
+          "rule_id": "611e2e76-a28f-4255-812c-eb8836b2f5bb",
+          "rule_title": "User Added To Local Admin Grp",
+          "rule_author": "Zach Mathis",
+          "mitre_tactics": [
+            "Persis"
+          ],
+          "mitre_techniques": [
+            "T1098"
+          ],
+          "status": "stable",
+          "record_id": 1000,
+          "details": "SrcSID: S-1-5-21-2425377081-3129163575-2985601102-1002 \u00a6 TgtGrp: Administrators \u00a6 LID: 0x224e3"
+        }
+      ]
+    }
+  ]
+};

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>OATH Receipt Explorer — every forensic claim is a signed receipt</title>
+<meta name="description" content="Explore signed Notarized envelopes from real DFIR runs. Each is set-equal verifiable. What cannot replay does not exist." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">⚖️</span>
+    <div>
+      <div class="brand-name">OATH</div>
+      <div class="brand-sub">Receipt Explorer</div>
+    </div>
+  </div>
+  <nav class="nav">
+    <a href="#runs">Runs</a>
+    <a href="#verify">Verify</a>
+    <a href="https://github.com/GharsallahDev/oath" target="_blank" rel="noopener">Source ↗</a>
+    <a href="https://arxiv.org/abs/2505.19973" target="_blank" rel="noopener">Benchmark ↗</a>
+  </nav>
+</header>
+
+<main>
+
+  <!-- HERO ============================================================ -->
+  <section class="hero">
+    <div class="hero-content">
+      <p class="hero-tag">SANS Find Evil! · Custom MCP Server pattern</p>
+      <h1 class="hero-title">
+        Every forensic claim<br/>
+        is a <span class="hero-emphasis">signed receipt</span>.
+      </h1>
+      <p class="hero-lede">
+        OATH is an autonomous DFIR agent that wraps mainstream forensic tools
+        (EZ Tools, Sleuthkit, Volatility 3, Hayabusa, plaso) in a cryptographic
+        chain-of-custody layer. Every finding it ships is bound to the
+        original-image SHA-256, signed with ed25519, and re-derivable on any
+        examiner's laptop in under a minute. Hallucinations don't get
+        suppressed — they get quarantined and shown on-screen.
+      </p>
+
+      <div class="hero-numbers">
+        <div class="metric">
+          <div class="metric-value">38.5%</div>
+          <div class="metric-label">GPT-4.1 baseline<br/><span class="muted">arXiv:2505.19973</span></div>
+        </div>
+        <div class="metric metric-emphasis">
+          <div class="metric-value">89.22%</div>
+          <div class="metric-label">OATH live (Gemini)<br/><span class="muted">verifier-gated</span></div>
+        </div>
+        <div class="metric">
+          <div class="metric-value">78.43%</div>
+          <div class="metric-label">OATH deterministic<br/><span class="muted">no LLM at all</span></div>
+        </div>
+      </div>
+
+      <p class="hero-foot">
+        Same corpus, same image, same scoring rule. The deterministic-without-an-LLM
+        number is the more interesting one: <em>the architectural lift alone is worth
+        +40 points</em> before the LLM proposes anything.
+      </p>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS ===================================================== -->
+  <section class="section">
+    <h2>How the chain holds</h2>
+
+    <div class="how-grid">
+      <div class="how-card">
+        <div class="how-num">1</div>
+        <h3>LLM proposes args, not code</h3>
+        <p>
+          The Custom MCP server exposes <strong>11 typed forensic functions</strong>
+          with closed schemas. The LLM emits a structured JSON of arguments —
+          partition, pattern, filter — never executable Python. The
+          script-generation failure class is gone.
+        </p>
+      </div>
+      <div class="how-card">
+        <div class="how-num">2</div>
+        <h3>Deterministic executor runs</h3>
+        <p>
+          OATH calls the underlying tool (<code>fls</code>, <code>EvtxECmd</code>,
+          <code>RECmd</code>, <code>vol</code>) with the LLM's args. Every byte
+          of stdout is BLAKE3-hashed; the canonical args are RFC-8785 JCS;
+          everything is signed with ed25519.
+        </p>
+      </div>
+      <div class="how-card">
+        <div class="how-num">3</div>
+        <h3>Verifier disposes</h3>
+        <p>
+          To ship a claim, the LLM cites a Notarized envelope by ID. The
+          Witness Oath Verifier re-runs the bound tool and confirms the
+          BLAKE3 of stdout matches. Mismatch → <strong>QUARANTINED</strong>
+          (visible "suspected but unproven"). Drift → <strong>RALPH
+          WIGGUM</strong> (visible re-proposal under a derived constraint).
+        </p>
+      </div>
+      <div class="how-card">
+        <div class="how-num">4</div>
+        <h3>Receipt ships with the finding</h3>
+        <p>
+          <code>oath verify &lt;envelope-id&gt;</code> re-derives any finding
+          from the original image on an examiner's laptop in under a minute.
+          No LLM. No API key. No MCP server boot. Pure Python.
+          <em>What cannot replay does not exist.</em>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- RUNS ============================================================ -->
+  <section id="runs" class="section">
+    <h2>Real run: CFReDS Data Leakage Case</h2>
+    <p class="section-lede">
+      A real Windows 7 image from NIST's CFReDS catalog. Scenario:
+      "Iaman Informant" accepts a bribe and exfiltrates confidential data via
+      USB, cloud, and email. Every typed function below ran against
+      <code>cfreds_2015_data_leakage_pc.E01</code> (2,147,463,521 bytes,
+      SHA-256 <code id="image-sha">e6365e44…</code>) and produced a signed
+      envelope you can inspect.
+    </p>
+
+    <div id="envelopes-list" class="envelopes-list">
+      <!-- populated by app.js -->
+      <div class="loader">Loading envelopes…</div>
+    </div>
+  </section>
+
+  <!-- VERIFY ========================================================== -->
+  <section id="verify" class="section section-dim">
+    <h2>Verify it yourself</h2>
+    <p class="section-lede">
+      Don't trust this page — verify locally. Every envelope JSON on this site
+      is committed to the OATH git repo. Install OATH on your own machine and
+      <code>oath verify &lt;envelope-id&gt;</code> re-derives the finding from
+      the original image bytes. Under a minute on commodity hardware.
+    </p>
+
+    <pre class="codeblock"><code># From a fresh git clone:
+git clone https://github.com/GharsallahDev/oath && cd oath
+
+# Install (macOS or SIFT — both tested):
+bash scripts/install-tools.sh        # macOS Apple Silicon
+# OR
+bash scripts/install-on-sift.sh      # SIFT Workstation / Ubuntu
+
+source .oath-tools/env.sh
+
+# Mount the same image:
+oath mount path/to/cfreds_2015_data_leakage_pc.E01
+
+# Re-derive ANY envelope from this site:
+oath verify &lt;envelope-id&gt;</code></pre>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <p>
+    OATH · MIT licensed · <a href="https://github.com/GharsallahDev/oath" target="_blank" rel="noopener">github.com/GharsallahDev/oath</a>
+  </p>
+  <p class="muted">
+    Built for the SANS <a href="https://findevil.devpost.com" target="_blank" rel="noopener">Find Evil!</a> hackathon ·
+    Pattern #2 (Custom MCP Server) · Submission · 2026-06
+  </p>
+</footer>
+
+<!-- Envelope detail modal -->
+<div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-panel">
+    <button class="modal-close" data-close aria-label="Close">×</button>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<script src="./app.js"></script>
+</body>
+</html>
