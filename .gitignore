@@ -72,3 +72,4 @@ logs/
 keys/
 .claude/
 log2timeline-*.log.gz
+psort-*.log.gz
