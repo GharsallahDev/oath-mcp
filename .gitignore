@@ -70,3 +70,4 @@ benchmarks/cache/
 logs/
 .oath/
 keys/
+.claude/
