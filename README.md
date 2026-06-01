@@ -9,8 +9,8 @@ OATH is an autonomous incident-response agent that wraps a hardened, cryptograph
 | System | DFIR-Metric Module III | TUS@4 |
 |---|---|---|
 | GPT-4.1 (paper baseline, arXiv:2505.19973) | NIST String Search corpus, 510 questions | **38.5%** |
-| OATH deterministic baseline (no LLM) | same corpus, same scoring rule | **62.55%** |
-| OATH live agent (Vertex Gemini + verifier) | same corpus, same scoring rule | _live run in progress_ |
+| OATH deterministic baseline (no LLM) | same corpus, same scoring rule | **78.43%** |
+| OATH live agent (Vertex Gemini 2.5 + verifier) | same corpus, same scoring rule | _live run in progress_ |
 
 See [`docs/ACCURACY.md`](docs/ACCURACY.md) for full methodology, per-question audit, and reproducibility.
 
