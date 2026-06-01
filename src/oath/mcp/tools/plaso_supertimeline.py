@@ -266,12 +266,42 @@ def plaso_supertimeline(
         "description_substring": description_substring,
     }
 
-    argv: list[str] = ["psort.py", "-o", "l2tcsv", "-w", "/dev/stdout"]
-    if time_window_start:
-        argv.extend(["--slice", time_window_start])
-    argv.append(str(plaso_path))
+    # psort.py writes its output to a file via -w <path>. Via the Docker
+    # shim on macOS the container can't write to host /tmp paths (UID
+    # mismatch + private/tmp symlink), so we put the output ALONGSIDE the
+    # .plaso store, which the shim mounts by virtue of the store's own
+    # directory being on the argv.
+    import os
+    import tempfile
 
-    stdout_bytes = executor.run(argv)
+    abs_plaso = Path(plaso_path).expanduser().resolve()
+    out_dir = abs_plaso.parent
+    # Use a randomized name in the same dir + clean up after.
+    fd, out_csv_str = tempfile.mkstemp(
+        prefix="oath-psort-", suffix=".csv", dir=str(out_dir)
+    )
+    os.close(fd)
+    # psort.py expects to CREATE the file; delete the empty placeholder.
+    Path(out_csv_str).unlink()
+    out_csv = Path(out_csv_str)
+    try:
+        argv: list[str] = [
+            "psort.py",
+            "-o", "l2tcsv",
+            "-w", str(out_csv),
+        ]
+        if time_window_start:
+            argv.extend(["--slice", time_window_start])
+        argv.append(str(abs_plaso))
+        # plaso supertimelines can be millions of events; allow up to
+        # 30 minutes for a query. The agent's per-question budget is
+        # bounded separately at the harness level.
+        executor.run(argv, timeout=1800)
+        stdout_bytes = out_csv.read_bytes() if out_csv.exists() else b""
+    finally:
+        if out_csv.exists():
+            out_csv.unlink()
+
     events = _parse_l2tcsv(stdout_bytes)
 
     # Apply filters post-query — psort filter coverage varies by version,
@@ -338,11 +368,17 @@ def reverify(
     # try to reconstruct the full argv from args_canonical; the canonical
     # query for verification is the un-sliced full-store dump compared via
     # stdout BLAKE3. (Drift either way → fail.)
-    argv = ["psort.py", "-o", "l2tcsv", "-w", "/dev/stdout", str(plaso_path)]
-    try:
-        stdout_bytes = executor.run(argv)
-    except Exception as e:
-        return False, f"psort.py re-run failed: {e}"
+    import tempfile
+
+    abs_plaso = Path(plaso_path).expanduser().resolve()
+    with tempfile.TemporaryDirectory(prefix="oath-psort-rv-") as tmpdir:
+        out_csv = Path(tmpdir) / "timeline.csv"
+        argv = ["psort.py", "-o", "l2tcsv", "-w", str(out_csv), str(abs_plaso)]
+        try:
+            executor.run(argv)
+        except Exception as e:
+            return False, f"psort.py re-run failed: {e}"
+        stdout_bytes = out_csv.read_bytes() if out_csv.exists() else b""
 
     actual = blake3.blake3(stdout_bytes).hexdigest()
     expected = envelope.header.stdout_blake3
