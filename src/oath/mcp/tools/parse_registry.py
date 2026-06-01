@@ -151,7 +151,7 @@ def _parse_recmd_csv(
       LastWriteTimestamp, PluginDetailFile
     """
     findings: list[RegistryFinding] = []
-    reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8", errors="replace")))
+    reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8-sig", errors="replace")))
     for row in reader:
         plugin = (row.get("Description") or row.get("Category") or "").strip()
         if plugin_filter and plugin not in plugin_filter:

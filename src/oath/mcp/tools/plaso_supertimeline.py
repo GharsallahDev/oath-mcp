@@ -185,7 +185,7 @@ def _coalesce_timestamp(date: str, time: str, tz: str) -> str:
 def _parse_l2tcsv(csv_bytes: bytes) -> list[TimelineEvent]:
     """Parse psort's l2tcsv output into typed events."""
     events: list[TimelineEvent] = []
-    reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8", errors="replace")))
+    reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8-sig", errors="replace")))
     for row in reader:
         ts = _coalesce_timestamp(row.get("date", ""), row.get("time", ""), row.get("timezone", ""))
         if not ts:

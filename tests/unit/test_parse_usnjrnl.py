@@ -28,12 +28,12 @@ from oath.receipt.notarized import SigningContext, verify_signature
 #   2. Rename mimi.exe → svchost-helper.exe (old + new pair, same FRN 12340)
 #   3. Delete svchost-helper.exe at 14:40 (the cleanup)
 #   4. Unrelated benign FileClose on notepad.exe
-SAMPLE_CSV = b"""UpdateTimestamp,UpdateSequenceNumber,UpdateReasons,FileAttributes,OffsetToData,ParentFileRecordNumber,ParentFileRecordSequenceNumber,FileRecordNumber,FileRecordSequenceNumber,ParentPath,FileName,Extension,SecurityId,SourceInfo
-2026-04-12T14:25:00,1000,FileCreate|Close,Archive,0,5,5,12340,1,C:\\Users\\Public,mimi.exe,exe,12345,None
-2026-04-12T14:28:00,1001,RenameOldName,Archive,0,5,5,12340,1,C:\\Users\\Public,mimi.exe,exe,12345,None
-2026-04-12T14:28:00,1002,RenameNewName|Close,Archive,0,5,5,12340,1,C:\\Users\\Public,svchost-helper.exe,exe,12345,None
-2026-04-12T14:40:00,1003,FileDelete|Close,Archive,0,5,5,12340,1,C:\\Users\\Public,svchost-helper.exe,exe,12345,None
-2026-04-12T15:00:00,1004,Close,Archive,0,5,5,99999,1,C:\\Windows\\System32,notepad.exe,exe,500,None
+SAMPLE_CSV = b"""Name,Extension,EntryNumber,SequenceNumber,ParentEntryNumber,ParentSequenceNumber,ParentPath,UpdateSequenceNumber,UpdateTimestamp,UpdateReasons,FileAttributes,OffsetToData,SourceFile
+mimi.exe,.exe,12340,1,5,5,C:\\Users\\Public,1000,2026-04-12T14:25:00,FileCreate|Close,Archive,0,UsnJrnl
+mimi.exe,.exe,12340,1,5,5,C:\\Users\\Public,1001,2026-04-12T14:28:00,RenameOldName,Archive,0,UsnJrnl
+svchost-helper.exe,.exe,12340,1,5,5,C:\\Users\\Public,1002,2026-04-12T14:28:00,RenameNewName|Close,Archive,0,UsnJrnl
+svchost-helper.exe,.exe,12340,1,5,5,C:\\Users\\Public,1003,2026-04-12T14:40:00,FileDelete|Close,Archive,0,UsnJrnl
+notepad.exe,.exe,99999,1,5,5,C:\\Windows\\System32,1004,2026-04-12T15:00:00,Close,Archive,0,UsnJrnl
 """
 
 
@@ -47,6 +47,16 @@ class FakeExecutor:
 
     def run(self, argv: list[str], *, capture: bool = True, timeout: float = 300) -> bytes:
         self.calls.append(list(argv))
+        # EZ Tool 2026.5.0 contract: --csv <dir> --csvf <file>. Mirror the
+        # file-output so production code's "executor.run(); open(path)"
+        # pattern works against this fake.
+        if "--csv" in argv and "--csvf" in argv:
+            csv_idx = argv.index("--csv")
+            csvf_idx = argv.index("--csvf")
+            if csv_idx + 1 < len(argv) and csvf_idx + 1 < len(argv):
+                outpath = Path(argv[csv_idx + 1]) / argv[csvf_idx + 1]
+                outpath.parent.mkdir(parents=True, exist_ok=True)
+                outpath.write_bytes(self.payload)
         return self.payload
 
 

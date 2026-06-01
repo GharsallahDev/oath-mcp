@@ -149,7 +149,7 @@ def _parse_mftecmd_csv(
     `0x10` = $STANDARD_INFORMATION attribute; `0x30` = $FILE_NAME attribute.
     """
     entries: list[MftEntry] = []
-    reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8", errors="replace")))
+    reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8-sig", errors="replace")))
     for row in reader:
         entry_number = _to_int_or_none(row.get("EntryNumber"))
         if entry_number is None:
@@ -255,16 +255,19 @@ def parse_mft(
         "mft_image_offset": mft_image_offset,
     }
 
-    argv: list[str] = [
-        "MFTECmd",
-        "-f",
-        str(mft_path),
-        "--csv",
-        "-",
-        "--csvf",
-        "stdout",
-    ]
-    stdout_bytes = executor.run(argv)
+    # MFTECmd 2026.5.0: --csv <dir> --csvf <file> (no stdout).
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="oath-mft-") as tmpdir:
+        out_csv = Path(tmpdir) / "mft.csv"
+        argv: list[str] = [
+            "MFTECmd",
+            "-f", str(mft_path),
+            "--csv", str(tmpdir),
+            "--csvf", out_csv.name,
+        ]
+        executor.run(argv)
+        stdout_bytes = out_csv.read_bytes() if out_csv.exists() else b""
     entries = _parse_mftecmd_csv(
         stdout_bytes,
         mft_offset=mft_image_offset,
@@ -306,11 +309,21 @@ def reverify(
     import blake3
 
     executor = executor or SubprocessExecutor()
-    argv = ["MFTECmd", "-f", str(mft_path), "--csv", "-", "--csvf", "stdout"]
-    try:
-        stdout_bytes = executor.run(argv)
-    except Exception as e:
-        return False, f"MFTECmd re-run failed: {e}"
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="oath-mft-rv-") as tmpdir:
+        out_csv = Path(tmpdir) / "mft.csv"
+        argv = [
+            "MFTECmd",
+            "-f", str(mft_path),
+            "--csv", str(tmpdir),
+            "--csvf", out_csv.name,
+        ]
+        try:
+            executor.run(argv)
+        except Exception as e:
+            return False, f"MFTECmd re-run failed: {e}"
+        stdout_bytes = out_csv.read_bytes() if out_csv.exists() else b""
     actual = blake3.blake3(stdout_bytes).hexdigest()
     expected = envelope.header.stdout_blake3
     if actual != expected:
