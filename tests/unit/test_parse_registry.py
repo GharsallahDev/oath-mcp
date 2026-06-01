@@ -43,6 +43,14 @@ class FakeExecutor:
 
     def run(self, argv: list[str], *, capture: bool = True, timeout: float = 300) -> bytes:
         self.calls.append(list(argv))
+        # RECmd 2026.5.0 writes to `--csv <dir> --csvf <file>`; mirror that.
+        if "--csv" in argv and "--csvf" in argv:
+            csv_idx = argv.index("--csv")
+            csvf_idx = argv.index("--csvf")
+            if csv_idx + 1 < len(argv) and csvf_idx + 1 < len(argv):
+                outpath = Path(argv[csv_idx + 1]) / argv[csvf_idx + 1]
+                outpath.parent.mkdir(parents=True, exist_ok=True)
+                outpath.write_bytes(self.payload)
         return self.payload
 
 
