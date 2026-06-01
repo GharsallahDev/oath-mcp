@@ -117,7 +117,7 @@ def _parse_pecmd_csv(
       Directories, FilesCount, Files
     """
     entries: list[PrefetchEntry] = []
-    reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8", errors="replace")))
+    reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8-sig", errors="replace")))
     for row in reader:
         source = (row.get("SourceFilename") or "").strip()
         if not source:
@@ -188,16 +188,19 @@ def parse_prefetch(
         "pf_image_offset": pf_image_offset,
     }
 
-    argv: list[str] = [
-        "PECmd",
-        "-d",
-        str(prefetch_dir),
-        "--csv",
-        "-",
-        "--csvf",
-        "stdout",
-    ]
-    stdout_bytes = executor.run(argv)
+    # PECmd 2026.5.0: --csv <dir> --csvf <file>.
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="oath-pec-") as tmpdir:
+        out_csv = Path(tmpdir) / "pecmd.csv"
+        argv: list[str] = [
+            "PECmd",
+            "-d", str(prefetch_dir),
+            "--csv", str(tmpdir),
+            "--csvf", out_csv.name,
+        ]
+        executor.run(argv)
+        stdout_bytes = out_csv.read_bytes() if out_csv.exists() else b""
     entries = _parse_pecmd_csv(stdout_bytes, pf_offset=pf_image_offset, name_filter=name_filter)
 
     return mint(
@@ -229,11 +232,21 @@ def reverify(
     import blake3
 
     executor = executor or SubprocessExecutor()
-    argv = ["PECmd", "-d", str(prefetch_dir), "--csv", "-", "--csvf", "stdout"]
-    try:
-        stdout_bytes = executor.run(argv)
-    except Exception as e:
-        return False, f"PECmd re-run failed: {e}"
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="oath-pec-rv-") as tmpdir:
+        out_csv = Path(tmpdir) / "pecmd.csv"
+        argv = [
+            "PECmd",
+            "-d", str(prefetch_dir),
+            "--csv", str(tmpdir),
+            "--csvf", out_csv.name,
+        ]
+        try:
+            executor.run(argv)
+        except Exception as e:
+            return False, f"PECmd re-run failed: {e}"
+        stdout_bytes = out_csv.read_bytes() if out_csv.exists() else b""
     actual = blake3.blake3(stdout_bytes).hexdigest()
     expected = envelope.header.stdout_blake3
     if actual != expected:

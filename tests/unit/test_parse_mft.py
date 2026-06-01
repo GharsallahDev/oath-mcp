@@ -38,6 +38,16 @@ class FakeExecutor:
 
     def run(self, argv: list[str], *, capture: bool = True, timeout: float = 300) -> bytes:
         self.calls.append(list(argv))
+        # EZ Tool 2026.5.0 contract: --csv <dir> --csvf <file>. Mirror the
+        # file-output so production code's "executor.run(); open(path)"
+        # pattern works against this fake.
+        if "--csv" in argv and "--csvf" in argv:
+            csv_idx = argv.index("--csv")
+            csvf_idx = argv.index("--csvf")
+            if csv_idx + 1 < len(argv) and csvf_idx + 1 < len(argv):
+                outpath = Path(argv[csv_idx + 1]) / argv[csvf_idx + 1]
+                outpath.parent.mkdir(parents=True, exist_ok=True)
+                outpath.write_bytes(self.payload)
         return self.payload
 
 

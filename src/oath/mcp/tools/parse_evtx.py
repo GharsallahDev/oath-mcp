@@ -171,7 +171,7 @@ def _parse_evtxecmd_csv(
     transforms before the LLM sees it).
     """
     records: list[EvtxRecord] = []
-    reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8", errors="replace")))
+    reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8-sig", errors="replace")))
     for i, row in enumerate(reader):
         try:
             event_id = int(row.get("EventId", "0").strip() or "0")

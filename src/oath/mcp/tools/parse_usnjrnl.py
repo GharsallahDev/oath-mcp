@@ -144,7 +144,7 @@ def _parse_usnjrnl_csv(
 ) -> list[UsnRecord]:
     """Parse MFTECmd's $J CSV output into typed records."""
     records: list[UsnRecord] = []
-    reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8", errors="replace")))
+    reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8-sig", errors="replace")))
     for i, row in enumerate(reader):
         usn = _to_int_or_none(row.get("UpdateSequenceNumber"))
         if usn is None:
@@ -160,7 +160,7 @@ def _parse_usnjrnl_csv(
             continue
 
         full_path = (row.get("ParentPath") or "").rstrip("\\/")
-        file_name = row.get("FileName", "")
+        file_name = row.get("Name", "")
         joined_path = f"{full_path}\\{file_name}" if full_path else file_name
 
         records.append(
@@ -171,15 +171,15 @@ def _parse_usnjrnl_csv(
                 file_name=file_name,
                 file_extension=row.get("Extension") or None,
                 full_path=joined_path or None,
-                file_record_number=_to_int_or_none(row.get("FileRecordNumber")) or 0,
+                file_record_number=_to_int_or_none(row.get("EntryNumber")) or 0,
                 file_record_sequence_number=_to_int_or_none(
-                    row.get("FileRecordSequenceNumber")
+                    row.get("SequenceNumber")
                 )
                 or 0,
-                parent_file_record_number=_to_int_or_none(row.get("ParentFileRecordNumber"))
+                parent_file_record_number=_to_int_or_none(row.get("ParentEntryNumber"))
                 or 0,
                 parent_file_record_sequence_number=_to_int_or_none(
-                    row.get("ParentFileRecordSequenceNumber")
+                    row.get("ParentSequenceNumber")
                 )
                 or 0,
                 source_info=row.get("SourceInfo") or None,
@@ -237,16 +237,19 @@ def parse_usnjrnl(
         "j_image_offset": j_image_offset,
     }
 
-    argv: list[str] = [
-        "MFTECmd",
-        "-f",
-        str(j_path),
-        "--csv",
-        "-",
-        "--csvf",
-        "stdout",
-    ]
-    stdout_bytes = executor.run(argv)
+    # MFTECmd 2026.5.0 ($J mode): --csv <dir> --csvf <file>.
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="oath-usn-") as tmpdir:
+        out_csv = Path(tmpdir) / "usn.csv"
+        argv: list[str] = [
+            "MFTECmd",
+            "-f", str(j_path),
+            "--csv", str(tmpdir),
+            "--csvf", out_csv.name,
+        ]
+        executor.run(argv)
+        stdout_bytes = out_csv.read_bytes() if out_csv.exists() else b""
     records = _parse_usnjrnl_csv(
         stdout_bytes,
         j_offset=j_image_offset,
@@ -288,11 +291,21 @@ def reverify(
     import blake3
 
     executor = executor or SubprocessExecutor()
-    argv = ["MFTECmd", "-f", str(j_path), "--csv", "-", "--csvf", "stdout"]
-    try:
-        stdout_bytes = executor.run(argv)
-    except Exception as e:
-        return False, f"MFTECmd ($J) re-run failed: {e}"
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="oath-usn-rv-") as tmpdir:
+        out_csv = Path(tmpdir) / "usn.csv"
+        argv = [
+            "MFTECmd",
+            "-f", str(j_path),
+            "--csv", str(tmpdir),
+            "--csvf", out_csv.name,
+        ]
+        try:
+            executor.run(argv)
+        except Exception as e:
+            return False, f"MFTECmd ($J) re-run failed: {e}"
+        stdout_bytes = out_csv.read_bytes() if out_csv.exists() else b""
     actual = blake3.blake3(stdout_bytes).hexdigest()
     expected = envelope.header.stdout_blake3
     if actual != expected:

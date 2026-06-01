@@ -142,7 +142,7 @@ def _parse_hayabusa_csv(
     """
     min_idx = SEVERITY_LEVELS.index(min_level.lower()) if min_level else 0
     hits: list[SigmaHit] = []
-    reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8", errors="replace")))
+    reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8-sig", errors="replace")))
     for row in reader:
         level = (row.get("Level") or "").strip().lower()
         if level not in SEVERITY_LEVELS:
@@ -150,7 +150,9 @@ def _parse_hayabusa_csv(
         if SEVERITY_LEVELS.index(level) < min_idx:
             continue
 
-        techniques = _split_csv_list(row.get("MitreTechniques"))
+        # Hayabusa 3.x renamed MitreTechniques -> MitreTags in the
+        # super-verbose profile. Accept either for forward/backward compat.
+        techniques = _split_csv_list(row.get("MitreTags") or row.get("MitreTechniques"))
         if technique_filter and not (set(techniques) & technique_filter):
             continue
 
@@ -261,13 +263,12 @@ def run_hayabusa(
         argv: list[str] = [
             "hayabusa",
             "csv-timeline",
-            "-d",
-            str(evtx_dir),
-            "-o",
-            out_path,
-            "-w",       # no-wizard (skip the interactive prompt)
-            "-C",       # clobber existing output file
-            "-Q",       # quiet errors
+            "-d", str(evtx_dir),
+            "-o", out_path,
+            "-w",                    # no-wizard
+            "-C",                    # clobber existing output
+            "-Q",                    # quiet errors
+            "-p", "super-verbose",   # MITRE tags + RuleAuthor + Status columns
         ]
         if rules_dir:
             argv += ["-r", str(rules_dir)]
@@ -341,6 +342,7 @@ def reverify(
             "-d", str(evtx_dir),
             "-o", out_path,
             "-w", "-C", "-Q",
+            "-p", "super-verbose",
         ]
         if rules_dir:
             argv += ["-r", str(rules_dir)]

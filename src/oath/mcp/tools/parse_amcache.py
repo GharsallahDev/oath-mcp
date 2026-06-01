@@ -140,7 +140,7 @@ def _parse_amcache_csv(
       FileVersionString, ...
     """
     entries: list[AmcacheEntry] = []
-    reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8", errors="replace")))
+    reader = csv.DictReader(io.StringIO(csv_bytes.decode("utf-8-sig", errors="replace")))
     for row in reader:
         file_id = (row.get("FileId") or "").strip()
         if not file_id:
@@ -223,17 +223,20 @@ def parse_amcache(
         "amcache_image_offset": amcache_image_offset,
     }
 
-    argv: list[str] = [
-        "AmcacheParser",
-        "-f",
-        str(amcache_path),
-        "--csv",
-        "-",
-        "--csvf",
-        "stdout",
-        "-i",  # include UnassociatedFileEntries too
-    ]
-    stdout_bytes = executor.run(argv)
+    # AmcacheParser 2026.5.0: --csv <dir> --csvf <file>.
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="oath-amc-") as tmpdir:
+        out_csv = Path(tmpdir) / "amcache.csv"
+        argv: list[str] = [
+            "AmcacheParser",
+            "-f", str(amcache_path),
+            "--csv", str(tmpdir),
+            "--csvf", out_csv.name,
+            "-i",  # include UnassociatedFileEntries too
+        ]
+        executor.run(argv)
+        stdout_bytes = out_csv.read_bytes() if out_csv.exists() else b""
     entries = _parse_amcache_csv(
         stdout_bytes,
         amcache_offset=amcache_image_offset,
@@ -270,20 +273,22 @@ def reverify(
     import blake3
 
     executor = executor or SubprocessExecutor()
-    argv = [
-        "AmcacheParser",
-        "-f",
-        str(amcache_path),
-        "--csv",
-        "-",
-        "--csvf",
-        "stdout",
-        "-i",
-    ]
-    try:
-        stdout_bytes = executor.run(argv)
-    except Exception as e:
-        return False, f"AmcacheParser re-run failed: {e}"
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="oath-amc-rv-") as tmpdir:
+        out_csv = Path(tmpdir) / "amcache.csv"
+        argv = [
+            "AmcacheParser",
+            "-f", str(amcache_path),
+            "--csv", str(tmpdir),
+            "--csvf", out_csv.name,
+            "-i",
+        ]
+        try:
+            executor.run(argv)
+        except Exception as e:
+            return False, f"AmcacheParser re-run failed: {e}"
+        stdout_bytes = out_csv.read_bytes() if out_csv.exists() else b""
     actual = blake3.blake3(stdout_bytes).hexdigest()
     expected = envelope.header.stdout_blake3
     if actual != expected:
