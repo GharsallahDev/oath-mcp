@@ -4,15 +4,15 @@
 
 OATH is an autonomous incident-response agent that wraps a hardened, cryptographically-anchored layer around mainstream forensic tools (Eric Zimmerman's EZ Tools, Sleuthkit, Volatility 3, Hayabusa, plaso). Every finding the agent emits is required to pass a deterministic re-derivation gate; claims that cannot be re-derived are surfaced to the examiner as "the agent suspected this but couldn't prove it" — never as confirmed findings.
 
-## The number
+## The numbers — with honest framing
 
-| System | DFIR-Metric Module III | TUS@4 |
+| System | TUS@4 (full corpus) | TUS@4 (non-empty-expected only) |
 |---|---|---|
-| GPT-4.1 (paper baseline, arXiv:2505.19973) | NIST String Search corpus, 510 questions | **38.5%** |
-| OATH deterministic baseline (no LLM) | same corpus, same scoring rule | **78.43%** (+40 pts) |
-| OATH live agent (Vertex Gemini 2.5 + verifier) | same corpus, same scoring rule | **89.22%** (+51 pts) |
+| GPT-4.1 (paper baseline, arXiv:2505.19973) | **38.5%** | not reported |
+| OATH deterministic baseline (no LLM) | **78.43%** | **~44.8%** (99/221) |
+| OATH live agent (Vertex Gemini 2.5 + verifier) | **89.22%** | TBD |
 
-See [`docs/ACCURACY.md`](docs/ACCURACY.md) for full methodology, per-question audit, and reproducibility.
+⚠️ The full-corpus column is **not** a clean head-to-head with GPT-4.1: 55% of the 510 questions have `expected_answer = []`, which any TUS@K system can claim for free by always including `[]` as one of its K candidates. The honest read of OATH's lift is the non-empty-expected subset and the *architectural* claim — see [`docs/ACCURACY.md`](docs/ACCURACY.md) §1. The contribution is **removing the script-generation failure class** by constraining the LLM to a typed-args proposal that a verifier-gated executor runs deterministically; it's not "OATH is a smarter LLM."
 
 ## Why it exists
 
