@@ -231,21 +231,29 @@ def parse_registry(
         "hive_image_offset": hive_image_offset,
     }
 
-    argv: list[str] = [
-        "RECmd",
-        "-f",
-        str(hive_path),
-        "--bn",  # batch mode (named plugins)
-        "ALL",
-        "--csv",
-        "-",
-        "--csvf",
-        "stdout",
-    ]
-    if plugins_dir:
-        argv += ["--bp", str(plugins_dir)]
+    # RECmd 2026.5.0 contract:
+    #   --bn <path-to-.reb-file>     (single batch file, not "ALL")
+    #   --csv <out-dir> --csvf <file> (file output; no stdout mode)
+    # We default to plugins_dir/Kroll_Batch.reb which is the canonical
+    # "all common plugins" bundle shipped with EZ Tools.
+    import tempfile
 
-    stdout_bytes = executor.run(argv)
+    if plugins_dir:
+        batch_file = plugins_dir / "Kroll_Batch.reb"
+    else:
+        batch_file = Path("Kroll_Batch.reb")
+
+    with tempfile.TemporaryDirectory(prefix="oath-recmd-") as tmpdir:
+        out_csv = Path(tmpdir) / "recmd.csv"
+        argv: list[str] = [
+            "RECmd",
+            "-f", str(hive_path),
+            "--bn", str(batch_file),
+            "--csv", str(tmpdir),
+            "--csvf", out_csv.name,
+        ]
+        executor.run(argv)
+        stdout_bytes = out_csv.read_bytes() if out_csv.exists() else b""
     findings = _parse_recmd_csv(
         stdout_bytes,
         hive_label=hive_label,
@@ -293,13 +301,27 @@ def reverify(
                 "deterministic semantics.",
             )
 
-    argv = ["RECmd", "-f", str(hive_path), "--bn", "ALL", "--csv", "-", "--csvf", "stdout"]
+    import tempfile
+
     if plugins_dir:
-        argv += ["--bp", str(plugins_dir)]
-    try:
-        stdout_bytes = executor.run(argv)
-    except Exception as e:
-        return False, f"RECmd re-run failed: {e}"
+        batch_file = plugins_dir / "Kroll_Batch.reb"
+    else:
+        batch_file = Path("Kroll_Batch.reb")
+
+    with tempfile.TemporaryDirectory(prefix="oath-recmd-rv-") as tmpdir:
+        out_csv = Path(tmpdir) / "recmd.csv"
+        argv = [
+            "RECmd",
+            "-f", str(hive_path),
+            "--bn", str(batch_file),
+            "--csv", str(tmpdir),
+            "--csvf", out_csv.name,
+        ]
+        try:
+            executor.run(argv)
+        except Exception as e:
+            return False, f"RECmd re-run failed: {e}"
+        stdout_bytes = out_csv.read_bytes() if out_csv.exists() else b""
     actual = blake3.blake3(stdout_bytes).hexdigest()
     expected = envelope.header.stdout_blake3
     if actual != expected:
