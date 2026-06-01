@@ -51,6 +51,15 @@ class FakeExecutor:
 
     def run(self, argv: list[str], *, capture: bool = True, timeout: float = 300) -> bytes:
         self.calls.append(list(argv))
+        # psort.py 20260512 writes to -w <path>. Production code reads the
+        # file back. Mirror that contract.
+        if "-w" in argv:
+            w_idx = argv.index("-w")
+            if w_idx + 1 < len(argv):
+                outpath = Path(argv[w_idx + 1])
+                if "/dev/" not in str(outpath):
+                    outpath.parent.mkdir(parents=True, exist_ok=True)
+                    outpath.write_bytes(self.payload)
         return self.payload
 
 
