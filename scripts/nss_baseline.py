@@ -457,13 +457,16 @@ def main() -> int:
         sys.stderr.write(".")
         sys.stderr.flush()
 
+    attempts_jsonl = Path("logs/benchmarks") / f"{run_id}_attempts.jsonl"
     harness = BenchmarkHarness(
         agent_fn=agent_fn,
         k=4,
         run_id=run_id,
         progress_callback=_progress,
         on_attempt=_on_attempt,
+        attempts_jsonl_path=attempts_jsonl,
     )
+    print(f"  resumable attempts log: {attempts_jsonl}", file=sys.stderr)
     result = harness.run(questions, corpus_sha256=corpus_sha256)
 
     print()

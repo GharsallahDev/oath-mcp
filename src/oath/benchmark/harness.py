@@ -104,10 +104,42 @@ class BenchmarkHarness:
     module: str = "III"
     progress_callback: Callable[[int, int, DfirMetricQuestion], None] | None = None
     on_attempt: Callable[[QuestionAttempt], None] | None = None
+    # Optional incremental persistence — JSONL of per-question attempts.
+    # When set, the harness appends each attempt as it lands AND a future
+    # run with the same path will skip already-attempted question_ids.
+    # This makes long benchmarks resumable after crashes / hangs / kills.
+    attempts_jsonl_path: Path | None = None
 
     def __post_init__(self) -> None:
         if self.k < 1:
             raise ValueError("k must be ≥ 1")
+
+    def _load_resumable_attempts(self) -> dict[str, QuestionAttempt]:
+        """Read prior attempts from attempts_jsonl_path. Returns {qid: attempt}."""
+        if not self.attempts_jsonl_path or not self.attempts_jsonl_path.exists():
+            return {}
+        out: dict[str, QuestionAttempt] = {}
+        import json
+        for line in self.attempts_jsonl_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                d = json.loads(line)
+                a = QuestionAttempt.model_validate(d)
+            except Exception:
+                continue
+            out[a.question_id] = a
+        return out
+
+    def _append_attempt(self, attempt: QuestionAttempt) -> None:
+        if not self.attempts_jsonl_path:
+            return
+        import json
+        self.attempts_jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.attempts_jsonl_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(attempt.model_dump(mode="json"), sort_keys=True))
+            f.write("\n")
 
     def run(
         self,
@@ -115,24 +147,37 @@ class BenchmarkHarness:
         *,
         corpus_sha256: str,
     ) -> BenchmarkResult:
-        """Run every question through the agent; return the BenchmarkResult."""
+        """Run every question through the agent; return the BenchmarkResult.
+
+        When `attempts_jsonl_path` is set, prior attempts from a partial run
+        are loaded and replayed without re-invoking the agent. The harness
+        only calls agent_fn for question_ids that don't already appear in
+        the JSONL. This makes long benchmarks fully resumable.
+        """
         started_at = datetime.now(timezone.utc).isoformat()
+        prior = self._load_resumable_attempts()
         attempts: list[QuestionAttempt] = []
+        resumed_count = 0
 
         for i, q in enumerate(questions):
             if self.progress_callback:
                 self.progress_callback(i, len(questions), q)
 
-            response = self.agent_fn(q, self.k)
-            attempt = score_attempt(
-                q,
-                response.candidates,
-                k=self.k,
-                wall_clock_seconds=response.wall_clock_seconds,
-                verified_envelope_count=response.verified_envelope_count,
-                quarantined_count=response.quarantined_count,
-                ralph_wiggum_events=response.ralph_wiggum_events,
-            )
+            if q.question_id in prior:
+                attempt = prior[q.question_id]
+                resumed_count += 1
+            else:
+                response = self.agent_fn(q, self.k)
+                attempt = score_attempt(
+                    q,
+                    response.candidates,
+                    k=self.k,
+                    wall_clock_seconds=response.wall_clock_seconds,
+                    verified_envelope_count=response.verified_envelope_count,
+                    quarantined_count=response.quarantined_count,
+                    ralph_wiggum_events=response.ralph_wiggum_events,
+                )
+                self._append_attempt(attempt)
             attempts.append(attempt)
 
             if self.on_attempt:

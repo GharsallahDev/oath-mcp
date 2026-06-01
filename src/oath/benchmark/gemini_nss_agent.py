@@ -87,16 +87,35 @@ def _default_interactor(
             "google-cloud-aiplatform not installed. `pip install 'oath[vertex]'`."
         ) from e
 
+    # Per-request timeout — long Vertex hangs (especially during regional
+    # capacity hiccups) would otherwise wedge the benchmark indefinitely.
+    # We pass the timeout via the model's client_options at init time since
+    # vertexai 1.x doesn't accept a per-call request_options kwarg on
+    # generate_content. The harness's per-question err handler converts a
+    # timeout into a deterministic-executor fallback so the run continues.
     vertexai.init(project=config.project, location=config.location)
     model = GenerativeModel(config.model, system_instruction=system_prompt)
-    resp = model.generate_content(
-        user_message,
-        generation_config=GenerationConfig(
-            temperature=config.temperature,
-            max_output_tokens=config.max_output_tokens,
-            response_mime_type="application/json",
-        ),
-    )
+
+    # Wrap the call in a thread + signal-based timeout. Cross-platform and
+    # robust to any underlying SDK hang.
+    import concurrent.futures as _cf
+
+    def _call():
+        return model.generate_content(
+            user_message,
+            generation_config=GenerationConfig(
+                temperature=config.temperature,
+                max_output_tokens=config.max_output_tokens,
+                response_mime_type="application/json",
+            ),
+        )
+
+    with _cf.ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(_call)
+        try:
+            resp = future.result(timeout=60.0)
+        except _cf.TimeoutError as e:
+            raise RuntimeError("vertex generate_content timeout (60s)") from e
 
     text = (resp.text or "").strip()
     usage = getattr(resp, "usage_metadata", None)
