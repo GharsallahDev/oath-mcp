@@ -12,15 +12,23 @@ from __future__ import annotations
 from oath.narrator.terminal import (
     TerminalNarrator,
     narrate_attempt,
+    narrate_banner,
     narrate_event,
+    narrate_mount,
     narrate_report,
+    narrate_shipped,
+    narrate_typed_call,
     narrate_verdict,
 )
 
 __all__ = [
     "TerminalNarrator",
     "narrate_attempt",
+    "narrate_banner",
     "narrate_event",
+    "narrate_mount",
     "narrate_report",
+    "narrate_shipped",
+    "narrate_typed_call",
     "narrate_verdict",
 ]
