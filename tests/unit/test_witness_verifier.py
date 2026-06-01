@@ -37,10 +37,11 @@ from oath.witness.verifier import (
 # --------------------------------------------------------------------------- #
 
 
-SAMPLE_EVTX_CSV = b"""RecordNumber,EventRecordId,TimeCreated,EventId,Level,Provider,Channel,Computer,UserId,MapDescription,ChunkNumber,UserName,RemoteHost,PayloadData1,PayloadData2,PayloadData3,PayloadData4,PayloadData5,ExecutableInfo,HiddenRecord,SourceFile,Payload
-8392,8392,2026-04-12T14:32:01.1234567Z,4624,Information,Microsoft-Windows-Security-Auditing,Security,WIN-VICTIM01,S-1-5-21-1234-5678-9012-1001,,1,Administrator,10.0.0.42,3,NTLM,NTLM V2,,,,,,Security.evtx,An account was successfully logged on. ...
-8393,8393,2026-04-12T14:33:55.7654321Z,4624,Information,Microsoft-Windows-Security-Auditing,Security,WIN-VICTIM01,S-1-5-21-1234-5678-9012-1001,,1,jdoe,,2,Kerberos,Kerberos,,,,,,Security.evtx,An account was successfully logged on. ...
-"""
+SAMPLE_EVTX_CSV = (
+    b"RecordNumber,EventRecordId,TimeCreated,EventId,Level,Provider,Channel,Computer,UserId,MapDescription,ChunkNumber,UserName,RemoteHost,PayloadData1,PayloadData2,PayloadData3,PayloadData4,PayloadData5,PayloadData6,ExecutableInfo,HiddenRecord,SourceFile,Keywords,ExtraDataOffset,Payload\n"
+    b'8392,8392,2026-04-12T14:32:01.1234567Z,4624,Information,Microsoft-Windows-Security-Auditing,Security,WIN-VICTIM01,S-1-5-21-1234-5678-9012-1001,,1,Administrator,10.0.0.42,Target Administrator,LogonType 3,LogonId: 0x12345,,,,,,Security.evtx,Audit success,0,"{""EventData"":{""Data"":[{""@Name"":""TargetUserName"",""#text"":""Administrator""},{""@Name"":""LogonType"",""#text"":""3""},{""@Name"":""AuthenticationPackageName"",""#text"":""NTLM""},{""@Name"":""IpAddress"",""#text"":""10.0.0.42""}]}}"\n'
+    b'8393,8393,2026-04-12T14:33:55.7654321Z,4624,Information,Microsoft-Windows-Security-Auditing,Security,WIN-VICTIM01,S-1-5-21-1234-5678-9012-1002,,1,jdoe,,Target jdoe,LogonType 2,LogonId: 0x12346,,,,,,Security.evtx,Audit success,0,"{""EventData"":{""Data"":[{""@Name"":""TargetUserName"",""#text"":""jdoe""},{""@Name"":""LogonType"",""#text"":""2""},{""@Name"":""AuthenticationPackageName"",""#text"":""Kerberos""}]}}"\n'
+)
 
 
 @dataclass

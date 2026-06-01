@@ -148,11 +148,57 @@ class SubprocessExecutor:
 
 
 def _parse_logon_type(s: str) -> int | None:
-    """LogonType is column-encoded; safely coerce."""
-    try:
-        return int(s.strip()) if s.strip() else None
-    except (ValueError, TypeError):
+    """Coerce a LogonType column value to int.
+
+    EvtxECmd 2026.5.0 emits PayloadData2 as `"LogonType N"` (label + value);
+    earlier versions emitted just `"N"`. Accept both shapes.
+    """
+    if not s or not s.strip():
         return None
+    try:
+        return int(s.strip())
+    except (ValueError, TypeError):
+        pass
+    # 'LogonType 3' shape — strip the prefix
+    import re as _re
+    m = _re.search(r"LogonType\s+(\d+)", s, _re.IGNORECASE)
+    if m:
+        try:
+            return int(m.group(1))
+        except ValueError:
+            return None
+    return None
+
+
+def _extract_eventdata(payload_json: str) -> dict[str, str]:
+    """Pull EventData['Data'] entries from EvtxECmd's Payload JSON into a flat
+    {Name: text} dict. Returns {} on parse failure.
+
+    EvtxECmd's Payload is a JSON object like
+      {"EventData": {"Data": [{"@Name":"LogonType","#text":"3"}, ...]}}.
+    """
+    if not payload_json:
+        return {}
+    import json as _json
+    try:
+        obj = _json.loads(payload_json)
+    except (ValueError, TypeError):
+        return {}
+    out: dict[str, str] = {}
+    try:
+        items = obj.get("EventData", {}).get("Data") or []
+    except (AttributeError, TypeError):
+        return out
+    if not isinstance(items, list):
+        return out
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        name = it.get("@Name")
+        text = it.get("#text")
+        if isinstance(name, str) and text is not None:
+            out[name] = str(text)
+    return out
 
 
 def _parse_evtxecmd_csv(
@@ -187,6 +233,37 @@ def _parse_evtxecmd_csv(
         # isn't load-bearing for the FIRST iteration. (Will tighten in v0.2.)
         record_offset = i * 4096  # placeholder — see comment above
 
+        # EvtxECmd 2026.5.0 puts auth-relevant native fields in the JSON
+        # Payload column as EventData[Data] entries. Extract them.
+        event_data = _extract_eventdata(row.get("Payload", ""))
+
+        # logon_type fallback chain: structured EventData -> PayloadData2 -> PayloadData1
+        logon_type = (
+            _parse_logon_type(event_data.get("LogonType", ""))
+            or _parse_logon_type(row.get("PayloadData2", ""))
+            or _parse_logon_type(row.get("PayloadData1", ""))
+        )
+        # auth_package_native: same fallback chain
+        auth_package = (
+            event_data.get("AuthenticationPackageName")
+            or event_data.get("PackageName")
+            or None
+        )
+        source_ip = (
+            event_data.get("IpAddress")
+            or row.get("RemoteHost") or None
+        )
+        user_name_native = (
+            event_data.get("TargetUserName")
+            or event_data.get("SubjectUserName")
+            or row.get("UserName") or None
+        )
+        user_sid_native = (
+            event_data.get("TargetUserSid")
+            or event_data.get("SubjectUserSid")
+            or row.get("UserId") or None
+        )
+
         records.append(
             EvtxRecord(
                 record_number=int(row.get("RecordNumber", "0") or 0),
@@ -196,11 +273,11 @@ def _parse_evtxecmd_csv(
                 provider=row.get("Provider", "") or "",
                 channel=row.get("Channel", "") or "",
                 computer=row.get("Computer") or None,
-                user_name=row.get("UserName") or None,
-                user_sid=row.get("UserId") or None,
-                logon_type=_parse_logon_type(row.get("PayloadData1", "")),
-                auth_package=row.get("PayloadData2") or None,
-                source_ip=row.get("RemoteHost") or None,
+                user_name=user_name_native,
+                user_sid=user_sid_native,
+                logon_type=logon_type,
+                auth_package=auth_package,
+                source_ip=source_ip,
                 payload_summary=row.get("Payload") or None,
                 source_evtx_offset=evtx_offset,
                 record_offset=record_offset,
