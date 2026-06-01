@@ -417,11 +417,33 @@ def main() -> int:
         def agent_fn(q, k):
             return deterministic(q, k, None)
 
+    import time as _time
+    start_t = _time.time()
+
+    def _progress(i, n, q):
+        elapsed = _time.time() - start_t
+        rate = (i + 1) / max(elapsed, 0.001)
+        eta = (n - i - 1) / max(rate, 0.001)
+        print(
+            f"  [{i+1:>4}/{n}] {q.question_id} ({q.answer_type.value:<28})  "
+            f"elapsed={elapsed:6.1f}s  eta={eta:6.1f}s  rate={rate:4.2f}q/s",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    def _on_attempt(a):
+        if not a.matched:
+            return
+        # Print a brief "+" so the user sees matches landing live
+        sys.stderr.write(".")
+        sys.stderr.flush()
+
     harness = BenchmarkHarness(
         agent_fn=agent_fn,
         k=4,
         run_id=run_id,
-        progress_callback=None,
+        progress_callback=_progress,
+        on_attempt=_on_attempt,
     )
     result = harness.run(questions, corpus_sha256=corpus_sha256)
 
