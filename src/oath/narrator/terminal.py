@@ -46,16 +46,152 @@ if TYPE_CHECKING:
 # demo viewer learns the colour-coding once and it stays consistent.
 
 _STYLE = {
-    "verified": "bold green",
-    "quarantined": "bold yellow",
-    "ralph_wiggum": "bold magenta",
-    "envelope_id": "cyan",
-    "tool": "blue",
-    "label_dim": "dim",
-    "warn": "yellow",
-    "fail": "bold red",
-    "ok": "green",
+    "verified": "bold #6dde8d",
+    "quarantined": "bold #f4c062",
+    "ralph_wiggum": "bold #c47de0",
+    "envelope_id": "#7fd8f5",
+    "tool": "bold #7fd8f5",
+    "label_dim": "dim #8b95a5",
+    "warn": "#f4c062",
+    "fail": "bold #ff7670",
+    "ok": "bold #6dde8d",
+    "accent": "bold #ffd089",
+    "subtle": "#5a6677",
+    "code": "#ffd089",
 }
+
+
+# --------------------------------------------------------------------------- #
+# Banner — opens every demo run                                               #
+# --------------------------------------------------------------------------- #
+
+
+_OATH_ASCII = r"""
+   ____    ___    _____   _   _
+  / __ \  / _ \  |_   _| | | | |
+ | |  | || |_| |   | |   | |_| |
+ | |  | ||  _  |   | |   |  _  |
+ | |__| || | | |   | |   | | | |
+  \____/ |_| |_|   |_|   |_| |_|
+"""
+
+
+def narrate_banner(*, console: Console | None = None) -> None:
+    """Big OATH banner — opens a demo or interactive run."""
+    console = console or Console()
+    title = Text()
+    title.append(_OATH_ASCII, style=_STYLE["accent"])
+    title.append("\n  Autonomous DFIR · every claim takes the oath\n", style=_STYLE["label_dim"])
+    title.append("  ", style="")
+    title.append("VERIFIED", style=_STYLE["verified"])
+    title.append(" · ", style=_STYLE["subtle"])
+    title.append("QUARANTINED", style=_STYLE["quarantined"])
+    title.append(" · ", style=_STYLE["subtle"])
+    title.append("RALPH WIGGUM", style=_STYLE["ralph_wiggum"])
+    title.append(" · ", style=_STYLE["subtle"])
+    title.append("REPLAY RECEIPT", style=_STYLE["accent"])
+    console.print(title)
+    console.print()
+
+
+def narrate_mount(
+    image_path: str,
+    image_sha256: str,
+    image_size_bytes: int,
+    handle_id: str,
+    *,
+    console: Console | None = None,
+) -> None:
+    """Confirm an EvidenceHandle was minted — what the demo opens with."""
+    console = console or Console()
+    body = Table.grid(padding=(0, 2))
+    body.add_column(style=_STYLE["label_dim"], justify="right")
+    body.add_column()
+    body.add_row("image", Text(image_path, style=_STYLE["code"]))
+    body.add_row("size", Text(f"{image_size_bytes:,} bytes", style="#e4e9ef"))
+    body.add_row(
+        "SHA-256",
+        Text.assemble(
+            (image_sha256, _STYLE["envelope_id"]),
+            ("  ", ""),
+            ("← bound to every envelope", _STYLE["subtle"]),
+        ),
+    )
+    body.add_row("handle_id", Text(handle_id, style=_STYLE["envelope_id"]))
+    title = Text("  ✓ EVIDENCE MOUNTED — read-only  ", style=_STYLE["verified"])
+    console.print(Panel(body, title=title, border_style=_STYLE["verified"], padding=(0, 1)))
+
+
+def narrate_typed_call(
+    tool_name: str,
+    tool_version: str,
+    args_pretty: str,
+    n_records: int,
+    envelope_id: str,
+    stdout_blake3: str,
+    *,
+    console: Console | None = None,
+) -> None:
+    """Show a typed forensic call landing — what the demo recording most often shows."""
+    console = console or Console()
+    body = Table.grid(padding=(0, 2))
+    body.add_column(style=_STYLE["label_dim"], justify="right")
+    body.add_column()
+    body.add_row(
+        "tool",
+        Text.assemble(
+            (tool_name, _STYLE["tool"]),
+            ("  v", _STYLE["subtle"]),
+            (tool_version, _STYLE["subtle"]),
+        ),
+    )
+    body.add_row("args", Text(args_pretty, style=_STYLE["code"]))
+    body.add_row(
+        "result",
+        Text.assemble(
+            (f"{n_records:,}", _STYLE["accent"]),
+            (" typed records", _STYLE["label_dim"]),
+        ),
+    )
+    body.add_row(
+        "envelope_id",
+        Text.assemble(
+            (envelope_id, _STYLE["envelope_id"]),
+            ("  ", ""),
+            ("← signed (ed25519)", _STYLE["subtle"]),
+        ),
+    )
+    body.add_row(
+        "stdout BLAKE3",
+        Text.assemble(
+            (stdout_blake3[:32] + "...", _STYLE["envelope_id"]),
+            ("  ", ""),
+            ("← verifiable via oath verify", _STYLE["subtle"]),
+        ),
+    )
+    title = Text(f"  ⚙  {tool_name}() — Notarized envelope minted  ", style=_STYLE["verified"])
+    console.print(Panel(body, title=title, border_style=_STYLE["verified"], padding=(0, 1)))
+
+
+def narrate_shipped(
+    claim_text: str,
+    envelope_id: str,
+    *,
+    console: Console | None = None,
+) -> None:
+    """The end-state of a verified claim — what the agent actually ships."""
+    console = console or Console()
+    body = Table.grid(padding=(0, 1))
+    body.add_column()
+    body.add_row(Text(claim_text, style="#e4e9ef"))
+    body.add_row(Text(""))
+    receipt = Text.assemble(
+        ("replay receipt  ", _STYLE["label_dim"]),
+        (f"oath verify {envelope_id}", _STYLE["code"]),
+    )
+    body.add_row(receipt)
+    title = Text("  ✓ SHIPPED — claim verified  ", style=_STYLE["verified"])
+    console.print(Panel(body, title=title, border_style=_STYLE["verified"], padding=(1, 2)))
 
 
 def _verdict_style(verdict: VerifyVerdict | str) -> str:
