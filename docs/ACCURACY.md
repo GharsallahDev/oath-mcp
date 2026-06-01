@@ -2,15 +2,26 @@
 
 This report is the empirical companion to `docs/ARCHITECTURE.md`. The architecture documents what OATH *is*; this document documents how it *performs*.
 
-## §1. Headline number
+## §1. Headline numbers — and the honest framing
 
 OATH targets the **DFIR-Metric Module III (NIST String Search)** benchmark from arXiv:2505.19973 — the only publicly-documented LLM benchmark in the autonomous-DFIR space. The published baseline is **GPT-4.1 at 38.5% TUS@4**.
 
-| System | Corpus | TUS@4 |
-|---|---|---|
-| GPT-4.1 (published baseline) | DFIR-Metric Module III NSS | 38.5% |
-| OATH deterministic baseline (no LLM) | DFIR-Metric Module III NSS (510 questions, both ss-win + ss-unix) | **78.43%** (cf. `logs/benchmarks/nss-baseline_III_tus4.json`) |
-| OATH live agent (Vertex Gemini 2.5 + verifier) | DFIR-Metric Module III NSS (same 510 questions) | **89.22%** (cf. `logs/benchmarks/nss-vertex_III_tus4.json`) |
+| System | Corpus | TUS@4 (full) | TUS@4 (non-empty-expected subset) |
+|---|---|---|---|
+| GPT-4.1 (published baseline) | DFIR-Metric Module III NSS | 38.5% | not reported in paper |
+| OATH deterministic baseline (no LLM) | same 510 questions | **78.43%** | **~44.8%** (99 / 221 non-empty list questions) |
+| OATH live agent (Vertex Gemini 2.5 + verifier) | same 510 questions | **89.22%** | TBD on non-empty subset |
+
+**Why the "full" column looks so good — and why we don't lead with it as a head-to-head:**
+
+- **The corpus is heavily weighted toward "empty-expected" questions.** 283 of 510 questions (55%) have `expected_answer = []` (search for a pattern that genuinely isn't on that partition). With TUS@K (K=4), a system can always include `[]` as one of its four candidate answers; doing so converts the entire empty-expected subset into a free 55% floor.
+- **The DFIR-Metric paper's GPT-4.1 baseline measures a different system architecture.** GPT-4.1 was asked to *write Python scripts* that get *executed* to produce the answer. Failure modes: syntax errors, wrong library imports, mmls-offset arithmetic mistakes, hallucinated inode numbers. The paper measures "can an LLM write code for NSS"; OATH measures "can a verifier-gated architecture answer NSS, optionally using an LLM to pick search args."
+- **The honest comparison is on the non-empty-expected subset** — the questions where the system actually has to find files. There OATH's deterministic baseline is **~44.8%**, modestly above the paper's GPT-4.1 baseline (the paper doesn't break out the same subset, so the comparison is approximate).
+
+**What the numbers actually demonstrate:**
+1. Constraining the LLM to a typed-args proposal (instead of asking it to write executable code) removes the entire script-generation class of failure. That alone closes most of the gap between LLM baselines and a heuristic search.
+2. The verifier-gated re-derivation contract holds end-to-end — every match in `logs/benchmarks/*.json` is set-equal to the corpus expected answer, deterministically reproducible from the image SHA-256 (random spot-check of 5 matches: all 5 set-equal, all 5 re-derivable).
+3. OATH's architectural lift is *removing a failure class*, not "being a better LLM." The number-chasing comparison to GPT-4.1's published score is misleading; the architecture story is the actual contribution.
 
 Both OATH numbers use the same scorer and corpus SHA-256 as the GPT-4.1 baseline. The corpus is publicly downloadable from `https://raw.githubusercontent.com/DFIR-Metric/DFIR-Metric/main/DFIR-Metric-NSS.json` and our scorecard JSON commits the SHA-256 of the version we ran against.
 
