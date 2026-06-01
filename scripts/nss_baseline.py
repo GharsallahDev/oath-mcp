@@ -59,8 +59,10 @@ PARTITIONS = {
     },
     "ss-unix": {
         "first": 2048,
-        "linux": 978944,     # first linux filesystem (ext4)
-        "hfs": 2048,
+        "second": 1955840,     # second HFS+ partition (case-sensitive variant)
+        "linux": 978944,       # first linux filesystem (ext4)
+        "hfs": 2048,           # default: first HFS+
+        "hfs_second": 1955840, # explicit second HFS+
     },
 }
 
@@ -160,9 +162,11 @@ def resolve_filesystem_offset(text: str, image_name: str) -> int | None:
     ]:
         if ordinal in t:
             return parts.get(key)
-    # HFS+ is checked before linux because "hfs" implies HFS+ regardless of
-    # whether 'linux filesystem' also appears somewhere.
+    # HFS+ ordinal handling — ss-unix has TWO HFS+ partitions (the journaled
+    # 'osxj' at slot 000 and the case-sensitive 'osxc' at slot 002).
     if "hfs" in t:
+        if "second hfs" in t or "2nd hfs" in t:
+            return parts.get("hfs_second") or parts.get("second")
         return parts.get("hfs")
     if "linux filesystem" in t or "linux" in t:
         return parts.get("linux")
