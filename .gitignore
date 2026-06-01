@@ -71,3 +71,4 @@ logs/
 .oath/
 keys/
 .claude/
+log2timeline-*.log.gz
