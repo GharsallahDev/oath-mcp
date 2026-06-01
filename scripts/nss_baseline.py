@@ -101,7 +101,22 @@ def extract_pattern(text: str) -> str | None:
         candidate = candidate.replace("\\(", "(").replace("\\)", ")")
         return candidate
 
-    # 3. Common quoted-pattern path, with format-example exclusions.
+    # 3. Word search: "the word/words <X> in the ..." or "the word <X> in".
+    # The X can be ASCII or non-ASCII (Arabic, French, etc.) so we don't
+    # constrain it to \w. We stop at " in " which terminates the pattern in
+    # every NSS question of this shape.
+    m = re.search(
+        r"the\s+word(?:/words|s)?\s+(\S+?)\s+in\s+", text, flags=re.IGNORECASE
+    )
+    if m:
+        candidate = m.group(1).strip().rstrip(".,;")
+        # Strip surrounding quotes if any.
+        if len(candidate) >= 2 and candidate[0] in ('"', "'") and candidate[-1] == candidate[0]:
+            candidate = candidate[1:-1]
+        if candidate:
+            return candidate
+
+    # 4. Common quoted-pattern path, with format-example exclusions.
     EXCLUDE = {
         "inode:filename", "inode:filename, ...",
         "DELETED-test-email.txt", "LIVE-test-email.txt",
