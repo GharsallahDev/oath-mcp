@@ -271,23 +271,31 @@ def parse_evtx(
         "evtx_image_offset": evtx_image_offset,
     }
 
-    # Build EvtxECmd command line.
-    # `--csv -` writes CSV to stdout (no file artifact left behind).
-    argv: list[str] = [
-        "EvtxECmd",
-        "-f",
-        str(evtx_path),
-        "--csv",
-        "-",
-        "--csvf",
-        "stdout",  # EvtxECmd 1.5 needs --csvf even with -; "stdout" is a sentinel.
-    ]
-    if event_ids:
-        argv += ["--inc", ",".join(str(e) for e in sorted(event_ids))]
-    if time_range:
-        argv += ["--sd", time_range[0], "--ed", time_range[1]]
+    # EvtxECmd 2026.5.0 dropped the `--csv -` stdout mode; it only writes
+    # to a file via `--csv DIR --csvf FILE`. Spool to a temp file, read the
+    # bytes back, delete. Same envelope semantics as the older stdout
+    # mode — the file contents are what we BLAKE3 + sign over.
+    import tempfile
 
-    stdout_bytes = executor.run(argv)
+    with tempfile.TemporaryDirectory(prefix="oath-evtx-") as tmpdir:
+        out_csv = Path(tmpdir) / "evtxecmd.csv"
+        argv: list[str] = [
+            "EvtxECmd",
+            "-f", str(evtx_path),
+            "--csv", str(tmpdir),
+            "--csvf", out_csv.name,
+        ]
+        if event_ids:
+            argv += ["--inc", ",".join(str(e) for e in sorted(event_ids))]
+        if time_range:
+            argv += ["--sd", time_range[0], "--ed", time_range[1]]
+        # EvtxECmd's stdout is its banner/progress; discard. The signed-over
+        # bytes are the produced CSV file contents.
+        executor.run(argv)
+        if out_csv.exists():
+            stdout_bytes = out_csv.read_bytes()
+        else:
+            stdout_bytes = b""
     records = _parse_evtxecmd_csv(
         stdout_bytes,
         evtx_offset=evtx_image_offset,
@@ -339,13 +347,17 @@ def reverify(
     _ = args  # not used; we re-run with the SAME args canonicalized in header
 
     # Re-execute. We trust args_canonical to encode the original filters.
-    # (For now, naive re-run with the same file; future tightening: parse
-    # args_canonical and reconstruct the exact argv.)
-    argv = ["EvtxECmd", "-f", str(evtx_path), "--csv", "-", "--csvf", "stdout"]
-    try:
-        stdout_bytes = executor.run(argv)
-    except subprocess.CalledProcessError as e:
-        return False, f"EvtxECmd re-run failed: {e}"
+    # EvtxECmd 2026.5.0 only writes to a file; spool to temp then read.
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="oath-evtx-rv-") as tmpdir:
+        out_csv = Path(tmpdir) / "evtxecmd.csv"
+        argv = ["EvtxECmd", "-f", str(evtx_path), "--csv", str(tmpdir), "--csvf", out_csv.name]
+        try:
+            executor.run(argv)
+        except subprocess.CalledProcessError as e:
+            return False, f"EvtxECmd re-run failed: {e}"
+        stdout_bytes = out_csv.read_bytes() if out_csv.exists() else b""
 
     actual = blake3.blake3(stdout_bytes).hexdigest()
     expected = envelope.header.stdout_blake3
