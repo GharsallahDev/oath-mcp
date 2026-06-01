@@ -10,7 +10,7 @@ OATH targets the **DFIR-Metric Module III (NIST String Search)** benchmark from 
 |---|---|---|
 | GPT-4.1 (published baseline) | DFIR-Metric Module III NSS | 38.5% |
 | OATH deterministic baseline (no LLM) | DFIR-Metric Module III NSS (510 questions, both ss-win + ss-unix) | **78.43%** (cf. `logs/benchmarks/nss-baseline_III_tus4.json`) |
-| OATH live agent (Vertex Gemini 2.5 + verifier) | DFIR-Metric Module III NSS (same 510 questions) | _live run in progress_ |
+| OATH live agent (Vertex Gemini 2.5 + verifier) | DFIR-Metric Module III NSS (same 510 questions) | **89.22%** (cf. `logs/benchmarks/nss-vertex_III_tus4.json`) |
 
 Both OATH numbers use the same scorer and corpus SHA-256 as the GPT-4.1 baseline. The corpus is publicly downloadable from `https://raw.githubusercontent.com/DFIR-Metric/DFIR-Metric/main/DFIR-Metric-NSS.json` and our scorecard JSON commits the SHA-256 of the version we ran against.
 
