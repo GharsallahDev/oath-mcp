@@ -29,11 +29,17 @@ def _q(qid: str = "q1") -> DfirMetricQuestion:
 # --------------------------------------------------------------------------- #
 
 
-def test_default_config_uses_gemini_25_flash():
+def test_default_config_uses_gemini_31_pro_preview():
+    """Defaults track the latest Gemini preview available on Vertex.
+
+    Updated 2026-06: gemini-3.1-pro-preview supersedes gemini-2.5-flash as the
+    default. The 3.x previews live on the `global` endpoint (no regional
+    endpoints yet), so DEFAULT_LOCATION moved from `us-central1` to `global`.
+    """
     cfg = GeminiNSSConfig()
-    assert cfg.model == DEFAULT_MODEL == "gemini-2.5-flash"
+    assert cfg.model == DEFAULT_MODEL == "gemini-3.1-pro-preview"
     assert cfg.project == DEFAULT_PROJECT == "zarda-e0938"
-    assert cfg.location == DEFAULT_LOCATION == "us-central1"
+    assert cfg.location == DEFAULT_LOCATION == "global"
     assert cfg.temperature == 0.0
 
 
@@ -54,7 +60,7 @@ def test_agent_fn_routes_args_to_executor():
         )
         return text, {"model": "gemini-2.5-flash"}
 
-    def fake_executor(_q, _k, args):
+    def fake_executor(_q, _k, args, **_kw):
         captured.append(args)
         return AgentResponse(candidates=['["dummy"]'])
 
@@ -78,7 +84,7 @@ def test_agent_fn_falls_back_when_vertex_errors():
     def broken_interactor(_cfg, _sys, _usr):
         raise RuntimeError("vertex unavailable")
 
-    def fake_executor(_q, _k, args):
+    def fake_executor(_q, _k, args, **_kw):
         fallback_called.append(args)
         return AgentResponse(candidates=["[]"])
 
@@ -98,7 +104,7 @@ def test_agent_fn_falls_back_when_llm_emits_garbage():
     def fake_interactor(_cfg, _sys, _usr):
         return "I do not know.", {"model": "gemini-2.5-flash"}
 
-    def fake_executor(_q, _k, args):
+    def fake_executor(_q, _k, args, **_kw):
         received.append(args)
         return AgentResponse(candidates=["[]"])
 

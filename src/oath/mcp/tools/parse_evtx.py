@@ -303,6 +303,8 @@ def parse_evtx(
     ctx: SigningContext,
     executor: ToolExecutor | None = None,
     prev_hash: str | None = None,
+    model_id: str | None = None,
+    prompt_hash: str | None = None,
     evtx_image_offset: int = 0,
 ) -> Notarized[list[EvtxRecord]]:
     """Extract EVTX records from a .evtx file and return a Notarized envelope.
@@ -394,6 +396,8 @@ def parse_evtx(
             ),
         ),
         prev_hash=prev_hash,
+        model_id=model_id,
+        prompt_hash=prompt_hash,
         ctx=ctx,
     )
 
@@ -414,22 +418,39 @@ def reverify(
     Returns (ok, reason). The Witness Oath Verifier uses this to detect
     tampering: if the .evtx has been modified between mint and verify, the
     BLAKE3 of EvtxECmd's stdout will diverge, and verification fails.
+
+    Important: we reconstruct the EvtxECmd argv from `envelope.header.args_canonical`
+    so that filter flags (--inc / --sd / --ed) used at mint time are also applied
+    at reverify time. Without this the stdout would always drift on a filtered
+    mint, producing spurious failures.
     """
+    import json
+    import tempfile
+
     import blake3
 
-    from oath.receipt.notarized import canonicalize
-
     executor = executor or SubprocessExecutor()
-    args = canonicalize(envelope.header.model_dump())
-    _ = args  # not used; we re-run with the SAME args canonicalized in header
 
-    # Re-execute. We trust args_canonical to encode the original filters.
-    # EvtxECmd 2026.5.0 only writes to a file; spool to temp then read.
-    import tempfile
+    # Read back the original filter args so we re-run with IDENTICAL options.
+    try:
+        original_args = json.loads(envelope.header.args_canonical)
+    except Exception as e:
+        return False, f"args_canonical not valid JSON: {e}"
+    event_ids = original_args.get("event_ids") or None
+    time_range = original_args.get("time_range") or None
 
     with tempfile.TemporaryDirectory(prefix="oath-evtx-rv-") as tmpdir:
         out_csv = Path(tmpdir) / "evtxecmd.csv"
-        argv = ["EvtxECmd", "-f", str(evtx_path), "--csv", str(tmpdir), "--csvf", out_csv.name]
+        argv: list[str] = [
+            "EvtxECmd",
+            "-f", str(evtx_path),
+            "--csv", str(tmpdir),
+            "--csvf", out_csv.name,
+        ]
+        if event_ids:
+            argv += ["--inc", ",".join(str(e) for e in sorted(event_ids))]
+        if time_range and len(time_range) == 2:
+            argv += ["--sd", str(time_range[0]), "--ed", str(time_range[1])]
         try:
             executor.run(argv)
         except subprocess.CalledProcessError as e:

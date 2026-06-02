@@ -216,6 +216,8 @@ def run_hayabusa(
     ctx: SigningContext,
     executor: ToolExecutor | None = None,
     prev_hash: str | None = None,
+    model_id: str | None = None,
+    prompt_hash: str | None = None,
     evtx_image_offset: int = 0,
 ) -> Notarized[list[SigmaHit]]:
     """Run Hayabusa against a directory of .evtx files; return a Notarized envelope.
@@ -301,6 +303,8 @@ def run_hayabusa(
             ),
         ),
         prev_hash=prev_hash,
+        model_id=model_id,
+        prompt_hash=prompt_hash,
         ctx=ctx,
     )
 
@@ -312,7 +316,15 @@ def reverify(
     rules_dir: Path | None = None,
     executor: ToolExecutor | None = None,
 ) -> tuple[bool, str]:
-    """Re-run Hayabusa; verify (a) rule corpus unchanged and (b) stdout BLAKE3 matches."""
+    """Re-run Hayabusa; verify (a) rule corpus unchanged and (b) stdout BLAKE3 matches.
+
+    Reconstructs the original argv from `envelope.header.args_canonical` so that
+    `min_level` filter used at mint time is also applied at reverify. Without
+    this, an envelope minted with `-m high` would be re-derived with no level
+    filter, producing different bytes and a spurious BLAKE3 drift.
+    """
+    import json
+
     import blake3
 
     executor = executor or SubprocessExecutor()
@@ -332,6 +344,13 @@ def reverify(
                 "envelope semantics deterministic.",
             )
 
+    # Read back original filter args so we re-run with IDENTICAL options.
+    try:
+        original_args = json.loads(envelope.header.args_canonical)
+    except Exception as e:
+        return False, f"args_canonical not valid JSON: {e}"
+    min_level = original_args.get("min_level") or None
+
     import tempfile
 
     with tempfile.NamedTemporaryFile(suffix=".csv", delete=False) as tmp:
@@ -346,6 +365,8 @@ def reverify(
         ]
         if rules_dir:
             argv += ["-r", str(rules_dir)]
+        if min_level:
+            argv += ["-m", min_level]
         try:
             executor.run(argv)
             with open(out_path, "rb") as fh:

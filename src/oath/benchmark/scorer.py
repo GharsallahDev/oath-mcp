@@ -59,6 +59,15 @@ class QuestionAttempt(BaseModel):
     quarantined_count: int | None = None
     ralph_wiggum_events: int | None = None
 
+    # LLM usage telemetry (None when the agent is deterministic / no API call).
+    model_id: str | None = None
+    prompt_token_count: int | None = None
+    candidates_token_count: int | None = None
+    total_token_count: int | None = None
+    # Gemini 3.x exposes explicit reasoning/thinking tokens separate from
+    # candidates_token_count; older models return None here.
+    thoughts_token_count: int | None = None
+
 
 class BenchmarkResult(BaseModel):
     """End-of-run scorecard for one corpus pass + one K value.
@@ -100,6 +109,11 @@ def score_attempt(
     verified_envelope_count: int | None = None,
     quarantined_count: int | None = None,
     ralph_wiggum_events: int | None = None,
+    model_id: str | None = None,
+    prompt_token_count: int | None = None,
+    candidates_token_count: int | None = None,
+    total_token_count: int | None = None,
+    thoughts_token_count: int | None = None,
 ) -> QuestionAttempt:
     """Adjudicate one question's response.
 
@@ -128,6 +142,11 @@ def score_attempt(
         verified_envelope_count=verified_envelope_count,
         quarantined_count=quarantined_count,
         ralph_wiggum_events=ralph_wiggum_events,
+        model_id=model_id,
+        prompt_token_count=prompt_token_count,
+        candidates_token_count=candidates_token_count,
+        total_token_count=total_token_count,
+        thoughts_token_count=thoughts_token_count,
     )
 
 

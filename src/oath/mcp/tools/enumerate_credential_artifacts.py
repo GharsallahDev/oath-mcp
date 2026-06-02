@@ -309,6 +309,8 @@ def enumerate_credential_artifacts(
     max_files: int | None = None,
     ctx: SigningContext,
     prev_hash: str | None = None,
+    model_id: str | None = None,
+    prompt_hash: str | None = None,
 ) -> Notarized[list[CredentialArtifact]]:
     """Walk the mounted volume; return a typed inventory of credential artifacts.
 
@@ -366,6 +368,8 @@ def enumerate_credential_artifacts(
         stdout_bytes=stdout_bytes,
         offsets=tuple(),  # Whole-volume walk; no single offset is meaningful.
         prev_hash=prev_hash,
+        model_id=model_id,
+        prompt_hash=prompt_hash,
         ctx=ctx,
     )
 
@@ -379,17 +383,32 @@ def reverify(
 
     This is pure Python — no subprocess. Determinism comes from sorted-walk
     + stable artifact-class set + content-hashing.
+
+    Reads `artifact_class_filter` and `max_files` back from `args_canonical`
+    so the re-walk uses IDENTICAL filtering to the original mint. Walking
+    unfiltered when the mint was filtered would always produce a different
+    canonical stdout and spuriously fail BLAKE3 — a real bug from a prior
+    revision of this function.
     """
+    import json
+
     import blake3
 
     if not mount_point.exists():
         return False, f"mount_point missing: {mount_point}"
 
-    # Reconstruct the same filter the original call used. We could parse
-    # args_canonical, but the safer move is to walk unfiltered then compare
-    # the resulting canonical stdout — drift in either direction fails.
+    try:
+        original_args = json.loads(envelope.header.args_canonical)
+    except Exception as e:
+        return False, f"args_canonical not valid JSON: {e}"
+    raw_filter = original_args.get("artifact_class_filter") or None
+    artifact_class_filter = set(raw_filter) if raw_filter else None
+    max_files = original_args.get("max_files") or None
+
     artifacts = _walk_and_classify(
-        mount_point, artifact_class_filter=None, max_files=None
+        mount_point,
+        artifact_class_filter=artifact_class_filter,
+        max_files=max_files,
     )
     stdout_bytes = (
         "\n".join(f"{a.sha256}  {a.size_bytes}  {a.relative_path}" for a in artifacts)

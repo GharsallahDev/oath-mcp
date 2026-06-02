@@ -9,7 +9,7 @@ OATH is an autonomous incident-response agent built on the SANS Find Evil! patte
 | System | DFIR-Metric Module III TUS@4 (510 questions) |
 |---|---|
 | GPT-4.1 (paper baseline, [arXiv:2505.19973](https://arxiv.org/abs/2505.19973)) | **38.5%** |
-| **OATH live agent (Vertex Gemini 2.5 + verifier)** | **89.22%** |
+| **OATH live agent (Vertex Gemini 3 Flash + verifier)** | **92.75%** |
 | OATH deterministic baseline (no LLM at all) | **78.43%** |
 
 Same corpus. Same image. Same scoring rule. Same K=4 candidate budget. **The deterministic-baseline number is the more interesting one** — it shows the architectural lift alone is worth ~40 points before any LLM proposes anything. Full methodology, per-question audit, and a reproduction one-liner: [`docs/ACCURACY.md`](docs/ACCURACY.md).
@@ -20,7 +20,7 @@ Existing autonomous-DFIR agents treat hallucination as a behavioral problem and 
 
 1. **The Witness Oath Verifier** — every LLM claim must pass deterministic re-derivation from the original-image SHA-256. Claims that fail are **QUARANTINED** — surfaced to the examiner as "the agent suspected this but couldn't prove it," never promoted to findings.
 
-2. **The Ralph Wiggum Loop** — when a hypothesis fails the verifier, the agent visibly abandons it on-screen and narrates revision under a derived constraint. Self-correction is architecturally enforced, not aspirational.
+2. **The Ralph Wiggum Loop** — when a hypothesis fails the verifier, the agent visibly abandons it on-screen and narrates revision under a derived constraint. Self-correction is architecturally enforced, not aspirational. Real, persisted artifact in [`logs/self-correction-demo/manifest.md`](logs/self-correction-demo/manifest.md) — re-run in 2 s via `python scripts/show_self_correction.py`.
 
 3. **The Replay Receipt** — `oath verify <envelope-id>` re-derives any finding from the original image on an examiner's laptop in well under a minute. No LLM, no API key, no MCP server boot. *What cannot replay does not exist.*
 
@@ -32,7 +32,7 @@ Existing autonomous-DFIR agents treat hallucination as a behavioral problem and 
 flowchart LR
     IMG[Forensic image .E01] --> MOUNT[oath mount]
     MOUNT --> MCP{11 typed functions<br/>parse_evtx · parse_mft<br/>parse_registry · parse_usnjrnl<br/>parse_amcache · parse_prefetch<br/>find_strings · run_hayabusa<br/>vol3_query · plaso_supertimeline<br/>enumerate_credential_artifacts}
-    MCP -->|signed Notarized envelope| AGENT[Vertex Gemini 2.5<br/>args-proposal architecture]
+    MCP -->|signed Notarized envelope| AGENT[Vertex Gemini 3 Flash<br/>args-proposal architecture]
     AGENT -->|cite envelope_id| VERIFIER{Witness Oath<br/>Verifier}
     VERIFIER -->|BLAKE3 match + predicate match| SHIP[VERIFIED → ship]
     VERIFIER -->|predicate miss| QUAR[QUARANTINED<br/>surfaced to examiner]
@@ -95,7 +95,7 @@ oath verify <envelope-id>
 | `src/oath/agent/` | Hypothesis-driven orchestration → structured `TriageReport` |
 | `src/oath/benchmark/` | DFIR-Metric harness + Claude/Gemini live-agent bridges + scorer |
 | `src/oath/narrator/` | Rich-based terminal narration of verifier + Ralph Wiggum events |
-| `tests/integration/test_spoliation.py` | 7 named tests proving the verifier catches image tampering / signature tampering / chain-of-custody breaks |
+| `tests/integration/test_spoliation.py` | 14 named tests proving the verifier catches image tampering / signature tampering / persisted-data tampering (`data_blake3`) / Daubert binding tampering (`model_id` + `prompt_hash` signed into the header) / chain-of-custody breaks |
 
 ## Documentation
 

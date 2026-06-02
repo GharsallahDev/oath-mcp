@@ -41,10 +41,10 @@ from oath.benchmark.claude_nss_agent import (
 
 # Defaults — Gemini 2.5 Flash is the right cost/quality tradeoff for NSS;
 # Pro is available if we want max accuracy.
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-3.1-pro-preview"  # June 2026: latest Vertex Gemini preview
 DEFAULT_TEMPERATURE = 0.0
 DEFAULT_PROJECT = "zarda-e0938"
-DEFAULT_LOCATION = "us-central1"
+DEFAULT_LOCATION = "global"  # gemini-3.x previews are served from the global endpoint
 
 
 # --------------------------------------------------------------------------- #
@@ -99,6 +99,7 @@ def _default_interactor(
     # Wrap the call in a thread + signal-based timeout. Cross-platform and
     # robust to any underlying SDK hang.
     import concurrent.futures as _cf
+    import time as _time
 
     def _call():
         return model.generate_content(
@@ -110,20 +111,74 @@ def _default_interactor(
             ),
         )
 
-    with _cf.ThreadPoolExecutor(max_workers=1) as pool:
-        future = pool.submit(_call)
+    # Retry FOREVER on transient failures (timeouts, 429s, 503s, connection
+    # resets). Falling back to the deterministic resolver on these errors
+    # silently penalizes the score AND charges the user for a wasted call —
+    # both unacceptable. Every question MUST receive a real LLM answer.
+    # Backoff caps at 600s; we sleep at the cap indefinitely until quota
+    # clears or a real (non-transient) error fires. The caller can ctrl-C
+    # to abort; otherwise the loop is guaranteed to either produce a real
+    # response or raise a non-transient error that propagates.
+    attempt_n = 0
+    while True:
+        attempt_n += 1
+        backoff = min(4.0 * (2 ** (attempt_n - 1)), 600.0) if attempt_n > 1 else 0.0
+        if backoff > 0:
+            print(
+                f"  retry #{attempt_n - 1} after {backoff:.0f}s backoff "
+                f"(model={config.model})", flush=True,
+            )
+            _time.sleep(backoff)
         try:
-            resp = future.result(timeout=60.0)
-        except _cf.TimeoutError as e:
-            raise RuntimeError("vertex generate_content timeout (60s)") from e
+            with _cf.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(_call)
+                try:
+                    resp = future.result(timeout=120.0)
+                except _cf.TimeoutError as e:
+                    raise RuntimeError("vertex generate_content timeout (120s)") from e
+            break
+        except Exception as e:  # noqa: BLE001
+            msg = str(e).lower()
+            is_transient = (
+                "timeout" in msg or "429" in msg or "resource exhausted" in msg
+                or "503" in msg or "504" in msg or "connection reset" in msg
+                or "unavailable" in msg or "internal error" in msg
+                or "deadline exceeded" in msg
+            )
+            if not is_transient:
+                # Real model-side error (bad input, auth, quota PERMANENTLY
+                # exhausted, etc.) — let the caller deal with it.
+                raise
 
-    text = (resp.text or "").strip()
+    # Gemini 3.x can return only reasoning/thought parts when the final-text
+    # part is empty; `resp.text` raises in that case. Walk the candidates'
+    # content parts and pick up the first non-thought text we find.
+    text = ""
+    try:
+        text = (resp.text or "").strip()
+    except Exception:
+        if resp.candidates:
+            for c in resp.candidates:
+                if c.content and c.content.parts:
+                    for p in c.content.parts:
+                        # `thought` parts carry chain-of-thought; skip those.
+                        if getattr(p, "thought", False):
+                            continue
+                        t = getattr(p, "text", None)
+                        if t:
+                            text = t.strip()
+                            break
+                if text:
+                    break
+
     usage = getattr(resp, "usage_metadata", None)
     return text, {
         "model": config.model,
         "prompt_token_count": getattr(usage, "prompt_token_count", None),
         "candidates_token_count": getattr(usage, "candidates_token_count", None),
         "total_token_count": getattr(usage, "total_token_count", None),
+        # Gemini 3.x exposes the thinking budget separately; older models lack this field.
+        "thoughts_token_count": getattr(usage, "thoughts_token_count", None),
     }
 
 
@@ -150,22 +205,38 @@ def build_gemini_nss_agent_fn(
 
     def agent_fn(question: DfirMetricQuestion, k: int) -> AgentResponse:
         user_msg = build_user_message(question)
+        # Compute the prompt hash UP-FRONT so we can bind it into the envelope
+        # whether or not the LLM call succeeds. Daubert binding: the receipt
+        # must record which model + which prompt produced this finding.
+        from oath.receipt.notarized import hash_prompt
+        prompt_hash = hash_prompt(SYSTEM_PROMPT, user_msg)
+
         t0 = time.perf_counter()
         try:
-            text, _telemetry = interactor(config, SYSTEM_PROMPT, user_msg)
+            text, telemetry = interactor(config, SYSTEM_PROMPT, user_msg)
         except Exception as e:
             print(f"  [{question.question_id}] vertex error: {e}", flush=True)
-            return deterministic_executor(question, k, None)
+            # Even on API failure we still know the model + prompt we attempted
+            return deterministic_executor(
+                question, k, None, model_id=config.model, prompt_hash=prompt_hash
+            )
         wall = time.perf_counter() - t0
 
         llm_args = parse_llm_args(text)
-        response = deterministic_executor(question, k, llm_args)
+        response = deterministic_executor(
+            question, k, llm_args, model_id=config.model, prompt_hash=prompt_hash
+        )
         return AgentResponse(
             candidates=response.candidates,
             wall_clock_seconds=wall,
             verified_envelope_count=response.verified_envelope_count,
             quarantined_count=response.quarantined_count,
             ralph_wiggum_events=response.ralph_wiggum_events,
+            model_id=telemetry.get("model"),
+            prompt_token_count=telemetry.get("prompt_token_count"),
+            candidates_token_count=telemetry.get("candidates_token_count"),
+            total_token_count=telemetry.get("total_token_count"),
+            thoughts_token_count=telemetry.get("thoughts_token_count"),
         )
 
     return agent_fn

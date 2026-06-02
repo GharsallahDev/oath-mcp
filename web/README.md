@@ -2,7 +2,7 @@
 
 Static SPA that lets anyone — judge, examiner, journalist — explore signed `Notarized<T>` envelopes from real OATH triage runs without installing anything.
 
-**Live URL:** _set this at submission time after `wrangler pages deploy ./web`_
+**Live URL:** deployed at submission via `wrangler pages deploy ./web` (one command, ~5 s). Until then, judges can run locally with the `python3 -m http.server` snippet below — every signed envelope shipped in `data.js` is real, replayable via `oath verify`.
 
 ## What's in here
 

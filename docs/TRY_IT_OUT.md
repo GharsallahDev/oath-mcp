@@ -100,9 +100,19 @@ oath verify --logs-dir ./logs                           # list known envelope ID
 oath verify <envelope-id>                               # PASS / FAIL with details
 ```
 
-The re-verify path re-runs the bound tool (same args from `args_canonical`), recomputes BLAKE3 of the stdout, compares to the value in the signed receipt. No LLM, no MCP, fully deterministic. Under a minute on commodity hardware.
+The re-verify path re-runs the bound tool (same args from `args_canonical`), recomputes BLAKE3 of the stdout AND `data_blake3` of the persisted records, compares both to the signed receipt. Catches tampering with either raw stdout or the persisted typed-data field. No LLM, no MCP, fully deterministic. Under a minute on commodity hardware.
 
-## 7. Cleanup
+## 7. Hypothesis-driven triage over signed envelopes
+
+```bash
+oath triage                                             # all 5 default hypotheses
+oath triage --hypothesis "Pass-the-Hash"                # filter by substring
+oath triage --out triage-report.json                    # write JSON instead of stdout
+```
+
+Loads every signed envelope under `logs/envelopes/` and `logs/sample-run/`, then runs the Witness Oath Verifier across the canonical PtH hypothesis bundle (T1550.002, T1003.001, T1070.001, T1070.006, T1547.001). Each hypothesis ends as `verified`, `quarantined`, or `ralph_wiggum` (drift). Pure-Python proposer — no LLM call. For LLM-driven triage, use `oath serve` and connect via Claude Code over MCP instead.
+
+## 8. Cleanup
 
 When you're done:
 

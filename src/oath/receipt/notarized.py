@@ -10,6 +10,10 @@ A `Notarized[T]` envelope binds an arbitrary tool result `T` to:
     two semantically-equivalent argument orderings produce identical hashes)
   - the BLAKE3 hash of the raw tool stdout (cheap, fast, collision-resistant
     where SHA-256 is overkill for ~MB-class tool outputs)
+  - the BLAKE3 hash of the canonical-form parsed data (so the typed `data`
+    field is transitively signed by the header signature — an attacker who
+    mutates persisted records but leaves raw stdout untouched is detected at
+    verify time)
   - the byte offsets in the source image of every artifact the tool surfaced
     (the Replay Receipt re-extracts those bytes and shows the examiner)
   - an ed25519 signature over the union of the above + a monotonic timestamp +
@@ -91,6 +95,19 @@ class NotarizedHeader(BaseModel):
     stdout_blake3: str = Field(
         ..., min_length=64, max_length=64, description="BLAKE3 of the raw tool stdout."
     )
+    data_blake3: str = Field(
+        ...,
+        min_length=64,
+        max_length=64,
+        description=(
+            "BLAKE3 of canonicalize(typed-data) — the parsed records this envelope "
+            "carries. Because the header is signed, this transitively cryptographically "
+            "protects the `data` field. The verifier MUST recompute this from the "
+            "current envelope.data at verify time and reject any mismatch — otherwise "
+            "an attacker who mutates the persisted data field but leaves the raw stdout "
+            "untouched could survive BLAKE3-of-stdout re-verification."
+        ),
+    )
     offsets: tuple[EvidenceOffset, ...] = Field(
         default=(), description="Byte spans in the source image the result depends on."
     )
@@ -106,6 +123,33 @@ class NotarizedHeader(BaseModel):
     # cross-run mixing). NOT part of the security boundary — purely audit.
     run_id: str = Field(..., description="UUID for the agent run that minted this envelope.")
 
+    # --------------------------- Daubert binding --------------------------- #
+    # When an envelope was minted in response to LLM-emitted arguments (e.g. a
+    # filter selected by Gemini, a pattern proposed by Claude), these two
+    # fields cryptographically bind the LLM run-context into the receipt.
+    # Court-admissibility ("which model produced this finding, from what
+    # prompt?") is the question Daubert challenges probe; signing model_id
+    # and the BLAKE3 of the canonical prompt into the receipt answers it
+    # exactly. Both are None for deterministic envelopes (no LLM in the loop).
+    model_id: str | None = Field(
+        default=None,
+        description=(
+            "Identifier of the LLM whose proposal informed this envelope's "
+            "args (e.g. 'gemini-3.1-pro-preview'). None for deterministic "
+            "envelopes minted without LLM input. Signed by the header "
+            "signature → tampering with the model-of-record is detectable."
+        ),
+    )
+    prompt_hash: str | None = Field(
+        default=None,
+        description=(
+            "BLAKE3 (hex) of the canonical (system_prompt || user_message) "
+            "that produced the LLM's proposal. None for deterministic envelopes. "
+            "Signed by the header signature → an examiner can prove which "
+            "prompt yielded which finding without trusting the agent's logs."
+        ),
+    )
+
 
 class Notarized(BaseModel, Generic[T]):
     """A tool result + its signed provenance envelope.
@@ -114,9 +158,16 @@ class Notarized(BaseModel, Generic[T]):
     `header` is the signed metadata. `sig` is the ed25519 signature over
     canonical(header) — base64url-encoded, no padding.
 
+    The header carries `data_blake3` = blake3(canonical(data)), so the header
+    signature transitively commits to a specific canonical-form of the data
+    payload. Tampering with the on-disk `data` after minting produces a
+    `verify_data_integrity()` mismatch.
+
     Verification: recompute canonical(header), check sig over it with the
-    public key, then re-run the tool against the recorded image and confirm
-    stdout_blake3 matches. ANY mismatch → the envelope is invalid.
+    public key, recompute blake3(canonical(envelope.data)) and confirm it
+    equals header.data_blake3, then re-run the tool against the recorded
+    image and confirm stdout_blake3 matches. ANY mismatch → the envelope is
+    invalid.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -150,6 +201,50 @@ def canonicalize(obj: Any) -> bytes:
         ensure_ascii=False,
         allow_nan=False,
     ).encode("utf-8")
+
+
+def _to_jsonable(obj: Any) -> Any:
+    """Recursively coerce typed data into JSON-serializable primitives.
+
+    Pydantic models become dicts via model_dump(mode="json") (which renders
+    datetimes/paths as strings), lists/tuples become lists, dicts pass
+    through with values recursed. Scalars are returned as-is.
+
+    This is the deterministic structure we hash into `data_blake3` so the
+    same parsed records always produce the same hash regardless of object
+    identity or in-memory ordering of equal Python dicts.
+    """
+    if isinstance(obj, BaseModel):
+        return obj.model_dump(mode="json")
+    if isinstance(obj, (list, tuple)):
+        return [_to_jsonable(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _to_jsonable(v) for k, v in obj.items()}
+    return obj
+
+
+def canonical_data_bytes(data: Any) -> bytes:
+    """RFC 8785 JCS bytes of the typed-data payload — the input to data_blake3."""
+    return canonicalize(_to_jsonable(data))
+
+
+def hash_prompt(system_prompt: str, user_message: str) -> str:
+    """BLAKE3 (hex) of the canonical concatenation of an LLM call's two prompts.
+
+    Used by LLM-driven tool wrappers to derive the `prompt_hash` they bind into
+    the Notarized header. Canonical form: `len(system) || system || len(user)
+    || user`, all UTF-8 — collision-resistant against either prompt being
+    extended with a delimiter-mimicking byte. Same canonical form must be
+    used at verify time, so the helper is the single source of truth.
+    """
+    sys_bytes = system_prompt.encode("utf-8")
+    user_bytes = user_message.encode("utf-8")
+    h = blake3.blake3()
+    h.update(len(sys_bytes).to_bytes(8, "big"))
+    h.update(sys_bytes)
+    h.update(len(user_bytes).to_bytes(8, "big"))
+    h.update(user_bytes)
+    return h.hexdigest()
 
 
 # --------------------------------------------------------------------------- #
@@ -205,6 +300,8 @@ def mint(
     offsets: tuple[EvidenceOffset, ...] = (),
     prev_hash: str | None,
     ctx: SigningContext,
+    model_id: str | None = None,
+    prompt_hash: str | None = None,
 ) -> Notarized[T]:
     """Construct and sign a Notarized envelope for one tool invocation.
 
@@ -212,6 +309,14 @@ def mint(
     forensic tool. The LLM has no direct path to this function — the MCP server
     enforces that envelopes are minted server-side from the tool's actual stdout,
     not from anything the LLM proposed.
+
+    When an LLM proposed the args this envelope was minted with, pass `model_id`
+    (e.g. "gemini-3.1-pro-preview") and `prompt_hash` (BLAKE3 of the canonical
+    system+user prompt). Both are signed by the header signature → an examiner
+    can prove which model and which prompt produced any given finding without
+    trusting the agent's own logs. Required by Daubert-style admissibility.
+    Pass None for both when the envelope was minted from a deterministic
+    args-resolver with no LLM in the loop.
     """
     if len(image_sha256) != 64 or not all(c in "0123456789abcdef" for c in image_sha256):
         raise ValueError(f"image_sha256 must be 64 hex chars: got {image_sha256!r}")
@@ -222,10 +327,13 @@ def mint(
         args_canonical=canonicalize(args).decode("utf-8"),
         image_sha256=image_sha256,
         stdout_blake3=blake3.blake3(stdout_bytes).hexdigest(),
+        data_blake3=blake3.blake3(canonical_data_bytes(data)).hexdigest(),
         offsets=offsets,
         ts=time.time(),
         prev=prev_hash,
         run_id=ctx.run_id,
+        model_id=model_id,
+        prompt_hash=prompt_hash,
     )
     sig_bytes = ctx.private_key.sign(canonicalize(header.model_dump())).signature
     sig_b64 = URLSafeBase64Encoder.encode(sig_bytes).rstrip(b"=").decode("ascii")
@@ -237,6 +345,12 @@ def verify_signature(envelope: Notarized[Any], pub_key: signing.VerifyKey) -> bo
 
     Returns True iff the signature is valid for `pub_key`. Does NOT re-run the
     tool or check stdout_blake3 — see `verify_full()` below for that.
+
+    Note: because the header carries `data_blake3`, a valid signature here also
+    cryptographically commits the signer to a specific canonical-form of the
+    `data` field. Call `verify_data_integrity()` to confirm the current data
+    matches that commitment — a mismatch means the persisted data was tampered
+    after minting.
     """
     canon = canonicalize(envelope.header.model_dump())
     sig_bytes = URLSafeBase64Encoder.decode(envelope.sig + "==")  # restore padding
@@ -245,6 +359,23 @@ def verify_signature(envelope: Notarized[Any], pub_key: signing.VerifyKey) -> bo
     except Exception:
         return False
     return True
+
+
+def verify_data_integrity(envelope: Notarized[Any]) -> bool:
+    """Confirm envelope.data still matches the signed data_blake3 in the header.
+
+    The header is signed; data_blake3 lives in the header. So if envelope.data
+    on disk has been tampered (e.g. a record fabricated, a field flipped),
+    canonical-hashing the current data will diverge from header.data_blake3,
+    and this returns False.
+
+    This is the SECOND half of envelope integrity — `verify_signature` confirms
+    the header is authentic; this confirms the data the header committed to is
+    still intact.
+    """
+    expected = envelope.header.data_blake3
+    actual = blake3.blake3(canonical_data_bytes(envelope.data)).hexdigest()
+    return actual == expected
 
 
 def header_hash(envelope: Notarized[Any]) -> str:

@@ -226,6 +226,8 @@ def plaso_supertimeline(
     ctx: SigningContext,
     executor: ToolExecutor | None = None,
     prev_hash: str | None = None,
+    model_id: str | None = None,
+    prompt_hash: str | None = None,
 ) -> Notarized[list[TimelineEvent]]:
     """Query a pre-built .plaso store via psort and return typed events.
 
@@ -335,6 +337,8 @@ def plaso_supertimeline(
             ),
         ),
         prev_hash=prev_hash,
+        model_id=model_id,
+        prompt_hash=prompt_hash,
         ctx=ctx,
     )
 

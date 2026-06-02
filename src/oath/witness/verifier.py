@@ -44,7 +44,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from oath.receipt.notarized import Notarized, verify_signature
+from oath.receipt.notarized import Notarized, verify_data_integrity, verify_signature
 from oath.witness.claim import (
     AgentClaim,
     ClaimEvidence,
@@ -282,6 +282,20 @@ class WitnessOathVerifier:
                     )
                     predicate_matches[envelope_id] = []
                     continue
+
+            # Data-integrity check — confirm envelope.data still matches the
+            # signed data_blake3 commitment in the header. Detects tampering
+            # with the persisted data field that would otherwise survive the
+            # stdout-BLAKE3 reverify path (because raw stdout bytes are
+            # unchanged on disk).
+            if not verify_data_integrity(envelope):
+                envelope_verdicts[envelope_id] = (
+                    False,
+                    "envelope.data does not match signed data_blake3 — persisted "
+                    "data has been tampered after minting",
+                )
+                predicate_matches[envelope_id] = []
+                continue
 
             # Step 1 — re-derive the envelope's tool output and confirm BLAKE3 match.
             kwargs = self.reverify_kwargs.get(envelope_id, {})

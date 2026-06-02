@@ -44,9 +44,16 @@ from oath.receipt.notarized import (
     SigningContext,
     canonicalize,
     header_hash,
+    verify_data_integrity,
     verify_signature,
 )
-from oath.witness.verifier import default_registry
+from oath.witness.claim import (
+    AgentClaim,
+    ClaimEvidence,
+    FindingType,
+    VerifyVerdict,
+)
+from oath.witness.verifier import WitnessOathVerifier, default_registry
 
 
 # --------------------------------------------------------------------------- #
@@ -349,7 +356,292 @@ class TestChainOfCustody:
 
 
 # --------------------------------------------------------------------------- #
-# 4. End-to-end via the registry (the path agents actually use)               #
+# 4. Persisted-data tampering — the "fabricate-a-record-but-leave-stdout-alone"
+#    attack. This is the failure mode that a header-only signature missed:    #
+#    an attacker mutates the persisted envelope.data field (adding a record   #
+#    the LLM made up), but DOES NOT touch the original tool's raw stdout, so  #
+#    the stdout_blake3 reverify path still passes. Without a data_blake3      #
+#    commitment in the signed header, the verifier would then match its       #
+#    predicate against the fabricated record and return VERIFIED.             #
+# --------------------------------------------------------------------------- #
+
+
+class TestPersistedDataTampering:
+    """Mutating `envelope.data` after minting MUST be caught by the verifier.
+
+    The architectural promise is "LLM cannot fabricate evidence the verifier
+    accepts." If we sign only the header, an attacker who can write to the
+    persisted JSONL store can mutate `data` directly — raw stdout on disk is
+    untouched, so re-running the tool produces matching BLAKE3-of-stdout, and
+    a naive verifier matches its predicate against the fabricated record.
+
+    The defence: include `data_blake3` = blake3(canonical(data)) in the signed
+    header. The verifier recomputes this from the current persisted data and
+    rejects on mismatch.
+    """
+
+    def test_data_blake3_is_present_in_signed_header(
+        self,
+        ctx: SigningContext,
+        evidence_image: Path,
+        evtx_file: Path,
+    ):
+        """Bare contract: the field exists, is a BLAKE3-sized hex string, and
+        is non-zero for non-empty data."""
+        handle = _make_handle(evidence_image)
+        envelope = parse_evtx.parse_evtx(
+            handle,
+            evtx_path=evtx_file,
+            ctx=ctx,
+            executor=FakeExecutor(payload=SAMPLE_EVTX_CSV),
+        )
+        assert hasattr(envelope.header, "data_blake3")
+        assert len(envelope.header.data_blake3) == 64
+        assert all(c in "0123456789abcdef" for c in envelope.header.data_blake3)
+        assert envelope.header.data_blake3 != "0" * 64
+
+    def test_pristine_data_passes_integrity_check(
+        self,
+        ctx: SigningContext,
+        evidence_image: Path,
+        evtx_file: Path,
+    ):
+        """Inverse control — unaltered data passes the integrity check.
+
+        This guards against false positives where serialization drift
+        (Pydantic version bump, field reordering) would break verification
+        of legitimate envelopes.
+        """
+        handle = _make_handle(evidence_image)
+        envelope = parse_evtx.parse_evtx(
+            handle,
+            evtx_path=evtx_file,
+            ctx=ctx,
+            executor=FakeExecutor(payload=SAMPLE_EVTX_CSV),
+        )
+        assert verify_data_integrity(envelope) is True
+
+        # Round-trip through JSON serialization (the on-disk path) and
+        # confirm integrity STILL holds. This is what `oath verify` does
+        # when it loads envelopes from logs/envelopes/*.jsonl.
+        roundtripped = type(envelope).model_validate_json(envelope.model_dump_json())
+        assert verify_data_integrity(roundtripped) is True
+
+    def test_persisted_data_mutation_fails_integrity_check(
+        self,
+        ctx: SigningContext,
+        evidence_image: Path,
+        evtx_file: Path,
+    ):
+        """The core attack: mutate envelope.data (add a fabricated record) and
+        confirm verify_data_integrity() catches it.
+
+        Crucially, the signature is STILL valid — the header bytes didn't
+        change. That's the subtle vulnerability: a header-only signature
+        gives no protection to the persisted data. data_blake3 closes it.
+        """
+        handle = _make_handle(evidence_image)
+        envelope = parse_evtx.parse_evtx(
+            handle,
+            evtx_path=evtx_file,
+            ctx=ctx,
+            executor=FakeExecutor(payload=SAMPLE_EVTX_CSV),
+        )
+        assert verify_signature(envelope, ctx.public_key) is True
+        assert verify_data_integrity(envelope) is True
+
+        # Attack: fabricate a record and slip it into envelope.data.
+        original_records = list(envelope.data)
+        assert len(original_records) >= 1
+        fabricated = original_records[0].model_copy(
+            update={"event_id": 1102, "user_name": "ATTACKER_FABRICATED"}
+        )
+        tampered_data = original_records + [fabricated]
+        tampered_envelope = envelope.model_copy(update={"data": tampered_data})
+
+        # The signature on the (untouched) header still verifies.
+        assert verify_signature(tampered_envelope, ctx.public_key) is True
+        # But data_blake3 now mismatches the persisted data — caught.
+        assert verify_data_integrity(tampered_envelope) is False, (
+            "Spoliation hole: persisted-data tampering not detected by "
+            "data_blake3. The LLM-cannot-fabricate-evidence claim is unfounded."
+        )
+
+    def test_verifier_rejects_tampered_data_end_to_end(
+        self,
+        ctx: SigningContext,
+        evidence_image: Path,
+        evtx_file: Path,
+    ):
+        """End-to-end: an attacker fabricates a record in envelope.data and
+        builds an AgentClaim whose predicate would match it. The
+        WitnessOathVerifier MUST refuse VERIFIED and surface RALPH_WIGGUM
+        (drift detected) instead.
+        """
+        handle = _make_handle(evidence_image)
+        envelope = parse_evtx.parse_evtx(
+            handle,
+            evtx_path=evtx_file,
+            ctx=ctx,
+            executor=FakeExecutor(payload=SAMPLE_EVTX_CSV),
+        )
+
+        # Fabricate a "1102 Audit log cleared" event the LLM might hallucinate.
+        original_records = list(envelope.data)
+        fabricated = original_records[0].model_copy(
+            update={"event_id": 1102, "user_name": "ATTACKER_FABRICATED"}
+        )
+        tampered_data = original_records + [fabricated]
+        tampered_envelope = envelope.model_copy(update={"data": tampered_data})
+
+        claim = AgentClaim(
+            claim_id="fab-claim-1102",
+            finding_type=FindingType.LOG_CLEARING,
+            natural_language=(
+                "Attacker cleared the Security log under user "
+                "ATTACKER_FABRICATED — claim fabricated by the LLM."
+            ),
+            supporting_evidence=(
+                ClaimEvidence(
+                    envelope_id="evtx-tampered",
+                    record_predicate={
+                        "event_id": 1102,
+                        "user_name": "ATTACKER_FABRICATED",
+                    },
+                ),
+            ),
+            confidence=0.99,
+            reasoning_hash="0" * 64,
+            model_id="test-model",
+            temperature=0.0,
+            seed=42,
+        )
+
+        # Use a registry whose reverify is hard-wired to pass — simulates the
+        # "raw stdout untouched on disk, BLAKE3 still matches" attack premise.
+        from oath.witness.verifier import ReverifyRegistry
+
+        forgiving_registry = ReverifyRegistry()
+        forgiving_registry.register(
+            "parse_evtx",
+            lambda env: (True, "stdout BLAKE3 matches header (raw bytes untouched)"),
+            required_kwargs=(),
+        )
+
+        verifier = WitnessOathVerifier(
+            envelopes_by_id={"evtx-tampered": tampered_envelope},
+            reverify_kwargs={"evtx-tampered": {}},
+            registry=forgiving_registry,
+            public_key_for_signatures=ctx.public_key,
+        )
+        result = verifier.verify(claim)
+
+        assert result.verdict != VerifyVerdict.VERIFIED, (
+            "Spoliation hole: verifier accepted a claim whose evidence "
+            "envelope had a fabricated record bolted onto envelope.data."
+        )
+        # Specifically, the data-integrity check fires before predicate match,
+        # so this is a RALPH_WIGGUM (drift) verdict.
+        assert result.verdict == VerifyVerdict.RALPH_WIGGUM
+        per_env_ok, per_env_reason = result.envelope_verdicts["evtx-tampered"]
+        assert per_env_ok is False
+        assert "data_blake3" in per_env_reason or "tampered" in per_env_reason.lower()
+
+
+# --------------------------------------------------------------------------- #
+# 5. Daubert binding — model_id + prompt_hash committed into the signed       #
+#    header so the receipt itself answers "which model produced this finding, #
+#    from what prompt?" without trusting the agent's own logs.                #
+# --------------------------------------------------------------------------- #
+
+
+class TestDaubertBinding:
+    """Cryptographic court-admissibility primitive: the LLM run-context that
+    produced an envelope's args is bound INTO the signed header. An examiner
+    can prove from the receipt alone — without trusting the agent — which
+    model + which prompt yielded any given finding.
+    """
+
+    def test_model_id_and_prompt_hash_are_signed(
+        self,
+        ctx: SigningContext,
+        evidence_image: Path,
+        evtx_file: Path,
+    ):
+        """When mint() is called with model_id + prompt_hash, both land in
+        the signed header and the signature verifies over them. Tampering
+        with either invalidates the signature.
+        """
+        from oath.receipt.notarized import hash_prompt
+
+        handle = _make_handle(evidence_image)
+        prompt_hash = hash_prompt("You are a DFIR agent.", "Find logon events.")
+        envelope = parse_evtx.parse_evtx(
+            handle,
+            evtx_path=evtx_file,
+            ctx=ctx,
+            executor=FakeExecutor(payload=SAMPLE_EVTX_CSV),
+            model_id="gemini-3.1-pro-preview",
+            prompt_hash=prompt_hash,
+        )
+        # Fields are populated.
+        assert envelope.header.model_id == "gemini-3.1-pro-preview"
+        assert envelope.header.prompt_hash == prompt_hash
+        assert len(envelope.header.prompt_hash) == 64
+        # Signature verifies over them.
+        assert verify_signature(envelope, ctx.public_key) is True
+        # Tampering with model_id alone breaks the signature.
+        tampered_header = envelope.header.model_copy(
+            update={"model_id": "ATTACKER-CLAIMED-DIFFERENT-MODEL"}
+        )
+        tampered_envelope = envelope.model_copy(update={"header": tampered_header})
+        assert verify_signature(tampered_envelope, ctx.public_key) is False, (
+            "Daubert hole: model_id is not actually signed."
+        )
+        # Tampering with prompt_hash alone breaks the signature.
+        tampered_header2 = envelope.header.model_copy(update={"prompt_hash": "0" * 64})
+        tampered_envelope2 = envelope.model_copy(update={"header": tampered_header2})
+        assert verify_signature(tampered_envelope2, ctx.public_key) is False, (
+            "Daubert hole: prompt_hash is not actually signed."
+        )
+
+    def test_deterministic_envelopes_have_null_model_binding(
+        self,
+        ctx: SigningContext,
+        evidence_image: Path,
+        evtx_file: Path,
+    ):
+        """When no LLM was in the loop (deterministic args resolver), the
+        envelope must signal that explicitly with model_id=None / prompt_hash=None.
+        This prevents an attacker from claiming "look, this finding has no
+        model" via post-hoc field stripping — null is the signed default,
+        and the signature still verifies over it.
+        """
+        handle = _make_handle(evidence_image)
+        envelope = parse_evtx.parse_evtx(
+            handle,
+            evtx_path=evtx_file,
+            ctx=ctx,
+            executor=FakeExecutor(payload=SAMPLE_EVTX_CSV),
+        )
+        assert envelope.header.model_id is None
+        assert envelope.header.prompt_hash is None
+        assert verify_signature(envelope, ctx.public_key) is True
+
+    def test_hash_prompt_is_collision_resistant_against_delimiter_mimic(self):
+        """hash_prompt uses length-prefixed concatenation, so naive
+        delimiter-mimic attacks (folding system_prompt and user_message into
+        each other) do NOT produce the same hash.
+        """
+        from oath.receipt.notarized import hash_prompt
+
+        a = hash_prompt("ABC", "DEF")
+        b = hash_prompt("ABCD", "EF")  # naive concat would collide on b'ABCDEF'
+        assert a != b
+
+
+# --------------------------------------------------------------------------- #
+# 6. End-to-end via the registry (the path agents actually use)               #
 # --------------------------------------------------------------------------- #
 
 

@@ -234,6 +234,8 @@ def find_strings_on_image(
     ctx: SigningContext,
     executor: TSKExecutor | None = None,
     prev_hash: str | None = None,
+    model_id: str | None = None,
+    prompt_hash: str | None = None,
 ) -> Notarized[list[StringMatch]]:
     """Search every file on the image for `pattern`.
 
@@ -397,6 +399,8 @@ def find_strings_on_image(
             ),
         ),
         prev_hash=prev_hash,
+        model_id=model_id,
+        prompt_hash=prompt_hash,
         ctx=ctx,
     )
 

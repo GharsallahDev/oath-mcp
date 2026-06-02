@@ -31,7 +31,7 @@ flowchart TB
         E1["• data · tool_name · tool_version (pinned)<br/>• args_canonical (RFC 8785 JCS)<br/>• image_sha256 · stdout_blake3<br/>• evidence_offsets · ed25519_sig · prev (hash chain link)"]
     end
 
-    subgraph AGENT["🤖 Vertex Gemini 2.5 — args-proposal architecture"]
+    subgraph AGENT["🤖 Vertex Gemini 3 Flash — args-proposal architecture"]
         PROPOSE[LLM emits JSON args spec<br/><i>NOT executable code</i>]
         EXEC[Deterministic executor runs typed call]
         PROPOSE --> EXEC
@@ -96,6 +96,8 @@ When a claim fails the Witness Oath:
 ╰────────────────────────────────────────────────────╯
 ```
 
+For a re-runnable, persisted artifact of this loop firing on real evidence-integrity rejection (data_blake3 mismatch on a tampered envelope, agent abandons + re-proposes citing a clean envelope, final VERIFIED), see [`logs/self-correction-demo/manifest.md`](../logs/self-correction-demo/manifest.md). Reproduce in two seconds with `python scripts/show_self_correction.py` — the verifier verdicts are byte-exact regardless of when you run it.
+
 Hallucinations don't get suppressed — they get **made visible**. The examiner watches the abandonment in real time.
 
 ### 3. Replay Receipt
@@ -111,7 +113,7 @@ Total wall-clock: typically under 5 seconds per receipt on commodity hardware. P
 
 ### 4. Public, reproducible benchmark
 
-OATH is scored on the [DFIR-Metric](https://arxiv.org/abs/2505.19973) Module III (NIST String Search) corpus — the same 510-question file the paper authors published. Frontier-LLM baseline (GPT-4.1) = **38.5% TUS@4**. OATH live (Vertex Gemini + verifier) = **89.22% TUS@4**. Same corpus, same image, same scoring rule, same K=4 candidate budget. Methodology + per-question audit + reproduction one-liner: [`docs/ACCURACY.md`](ACCURACY.md).
+OATH is scored on the [DFIR-Metric](https://arxiv.org/abs/2505.19973) Module III (NIST String Search) corpus — the same 510-question file the paper authors published. Frontier-LLM baseline (GPT-4.1) = **38.5% TUS@4**. OATH live (Vertex Gemini 3 Flash + verifier) = **92.75% TUS@4**. Same corpus, same image, same scoring rule, same K=4 candidate budget. Methodology + per-question audit + reproduction one-liner: [`docs/ACCURACY.md`](ACCURACY.md).
 
 ## Security boundaries — where they're enforced
 
@@ -129,12 +131,14 @@ Per Find Evil! judging criterion #4 (Constraint Implementation), this table make
 | Plugin / rule corpus is pinned | **Architectural** | `parse_registry` records the SHA-256 of the RECmd plugin pack at mint time. `run_hayabusa` records the SHA-256 of the Sigma rule corpus. Updates to either are caught by `reverify` and surfaced as "rule corpus drift". |
 | LLM stays inside the typed-args schema | **Prompt-based** ⚠️ | The Vertex Gemini system prompt instructs the LLM to emit a JSON object matching the schema. If the LLM ignores this, our parser (`parse_llm_args` in `gemini_nss_agent.py`) returns `None` and the deterministic executor falls back to heuristic resolution — **no malicious LLM output reaches the forensic tools.** This is the only prompt-based layer in the system, and it fails *closed* (skipped, not bypassed). |
 | Spoliation (image-byte mutation between mint and reverify) | **Architectural** | Mutating the image bytes after envelope mint causes the underlying tool to produce different output bytes, which fails the BLAKE3 chain. Covered by `tests/integration/test_spoliation.py`. |
+| Persisted `envelope.data` tampering (fabricated record planted in the JSONL store) | **Architectural** | `NotarizedHeader` carries `data_blake3 = BLAKE3(canonicalize(data))`; because the header is signed, the data field is transitively cryptographically committed. The verifier recomputes `data_blake3` from the current persisted data and rejects on mismatch (RALPH_WIGGUM, drift detected). Without this, an attacker who can write the JSONL store could mutate `envelope.data` while leaving raw stdout untouched, surviving the BLAKE3-of-stdout reverify. |
+| Daubert binding — "which model produced this finding, from what prompt?" | **Architectural** | `NotarizedHeader` carries `model_id` (e.g. `gemini-3.1-pro-preview`) and `prompt_hash = BLAKE3(len-prefixed(system_prompt \|\| user_message))`. Both are signed by the header signature. The receipt itself answers the Daubert question without trusting the agent's logs. Tampering with either field invalidates the signature. None-valued for deterministic envelopes (no LLM in the loop), and the null is itself signed — preventing post-hoc field-stripping attacks. |
 
 **Net:** The single prompt-based guardrail (LLM-stays-in-schema) fails *closed* — when the LLM disobeys, the path is broken, not bypassed. The forensic-tool surface itself has no prompt-controlled bypass.
 
 ## Spoliation contract — what we tested
 
-`tests/integration/test_spoliation.py` (7 tests, all passing) covers:
+`tests/integration/test_spoliation.py` (14 tests, all passing) covers:
 
 1. **Single-byte image mutation breaks the SHA-256 rehash** — proves the front-line spoliation check works.
 2. **Tool-output drift fails reverify** — if the bytes the tool produces change between mint and verify, BLAKE3 catches it.
@@ -143,6 +147,13 @@ Per Find Evil! judging criterion #4 (Constraint Implementation), this table make
 5. **`args_canonical` tampering fails signature** — swapping a filter argument to hide an event is caught.
 6. **Chain-of-custody break detection** — modifying a middle envelope breaks the `prev`-hash chain link to the next envelope.
 7. **End-to-end via verifier registry** — the production-path entry the agent actually uses surfaces spoliation correctly.
+8. **`data_blake3` is in the signed header** — bare contract that the field exists, is hex-encoded BLAKE3, and is non-zero for non-empty data.
+9. **Pristine data passes the integrity check** — including after a JSON round-trip through the persistence store, so legitimate envelopes don't false-positive.
+10. **Persisted-data mutation fails integrity check** — fabricating a record in `envelope.data` is caught even though the signature on the (untouched) header still verifies. Without `data_blake3` this attack would survive.
+11. **Verifier end-to-end rejects tampered data** — with a forgiving registry that mimics "raw stdout untouched on disk," the full `WitnessOathVerifier.verify()` still returns RALPH_WIGGUM with `data_blake3` in the reason, never VERIFIED.
+12. **Daubert: `model_id` and `prompt_hash` are signed into the header** — tampering with either invalidates the ed25519 signature. The receipt itself proves which model + which prompt produced this finding.
+13. **Deterministic envelopes carry null binding** — `model_id=None` and `prompt_hash=None` are signed defaults; post-hoc stripping is detectable because the signature was computed over the null values.
+14. **`hash_prompt` is collision-resistant against delimiter-mimic attacks** — length-prefixed concatenation so `hash_prompt("ABC","DEF") != hash_prompt("ABCD","EF")`.
 
 ## What OATH explicitly does NOT claim
 

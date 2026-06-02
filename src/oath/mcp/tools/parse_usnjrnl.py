@@ -206,6 +206,8 @@ def parse_usnjrnl(
     ctx: SigningContext,
     executor: ToolExecutor | None = None,
     prev_hash: str | None = None,
+    model_id: str | None = None,
+    prompt_hash: str | None = None,
     j_image_offset: int = 0,
 ) -> Notarized[list[UsnRecord]]:
     """Extract $UsnJrnl:$J records.
@@ -277,6 +279,8 @@ def parse_usnjrnl(
             ),
         ),
         prev_hash=prev_hash,
+        model_id=model_id,
+        prompt_hash=prompt_hash,
         ctx=ctx,
     )
 

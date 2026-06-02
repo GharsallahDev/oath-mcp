@@ -23,10 +23,13 @@ from pathlib import Path
 from oath.mcp.persistence import EnvelopeStore, load_handle
 from oath.mcp.tools import (
     enumerate_credential_artifacts,
+    find_strings_on_image,
     parse_evtx,
     parse_mft,
+    parse_prefetch,
     parse_registry,
     parse_usnjrnl,
+    plaso_supertimeline,
     run_hayabusa,
 )
 from oath.receipt.notarized import SigningContext
@@ -36,6 +39,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OATH_TOOLS = ROOT / ".oath-tools"
 DLC_DIR = ROOT / "corpus" / "data-leakage-case"
 EVIDENCE_DIR = Path("/tmp/oath-dlc")
+PLASO_STORE = DLC_DIR / "dlc.plaso"
 
 
 def _w(out: Path, text: str) -> None:
@@ -221,6 +225,77 @@ def main() -> int:
         )
     except Exception as e:
         record("run_hayabusa", False, f"{type(e).__name__}: {e}")
+
+    # ------------------------------------------------------------------ #
+    # parse_prefetch — execution residue                                 #
+    # PECmd refuses to run on macOS ("Non-Windows platforms not supported #
+    # due to the need to load decompression specific Windows libraries"), #
+    # so on Apple Silicon we don't mint an empty envelope. The full       #
+    # parse_prefetch envelope is produced by the SIFT install path        #
+    # (`scripts/install-on-sift.sh`) where PECmd runs natively.           #
+    # ------------------------------------------------------------------ #
+    import platform as _platform
+    if _platform.system() == "Linux":
+        try:
+            env = parse_prefetch.parse_prefetch(
+                handle,
+                prefetch_dir=EVIDENCE_DIR / "Prefetch",
+                ctx=ctx,
+                prev_hash=store.last_prev_hash,
+            )
+            env_id = store.append(env)
+            record(
+                "parse_prefetch (Windows/Prefetch/*.pf)",
+                True,
+                f"{len(env.data)} prefetch entries — execution residue on the suspect host · "
+                f"envelope `{env_id[:16]}...`",
+                envelope_id=env_id,
+                tool=f"{env.header.tool_name} {env.header.tool_version}",
+                blake3=env.header.stdout_blake3[:16],
+            )
+        except Exception as e:
+            record("parse_prefetch", False, f"{type(e).__name__}: {e}")
+    else:
+        record(
+            "parse_prefetch (skipped on macOS)",
+            False,
+            "PECmd 2026.5.0 refuses to run on non-Windows platforms (Windows "
+            "decompression libraries unavailable). The SIFT install path "
+            "(`scripts/install-on-sift.sh`) runs it natively on Ubuntu x86_64.",
+        )
+
+    # ------------------------------------------------------------------ #
+    # plaso_supertimeline — full multi-source timeline                   #
+    # ------------------------------------------------------------------ #
+    try:
+        env = plaso_supertimeline.plaso_supertimeline(
+            handle,
+            plaso_path=PLASO_STORE,
+            description_substring="informant",
+            ctx=ctx,
+            prev_hash=store.last_prev_hash,
+        )
+        env_id = store.append(env)
+        record(
+            "plaso_supertimeline (super-timeline, description~'informant')",
+            True,
+            f"{len(env.data):,} timeline events matching 'informant' across the 766 MB .plaso store · "
+            f"envelope `{env_id[:16]}...`",
+            envelope_id=env_id,
+            tool=f"{env.header.tool_name} {env.header.tool_version}",
+            blake3=env.header.stdout_blake3[:16],
+        )
+    except Exception as e:
+        record("plaso_supertimeline", False, f"{type(e).__name__}: {e}")
+
+    # NOTE: find_strings_on_image is NOT included in the curated sample-run.
+    # It would burn 30+ minutes scanning the full NTFS partition for the
+    # suspect's email. The DFIR-Metric Module III benchmark (`scripts/nss_baseline.py
+    # --live-vertex`) already exercises that tool end-to-end on a different
+    # NIST corpus designed for it, so the sample-run focuses on the artifact-
+    # parsing tools (parse_evtx, parse_registry, parse_mft, parse_usnjrnl,
+    # run_hayabusa, parse_prefetch, plaso_supertimeline) where the DLC case
+    # is the canonical demonstration.
 
     # ------------------------------------------------------------------ #
     # Final write                                                         #

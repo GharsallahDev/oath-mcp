@@ -166,6 +166,8 @@ def parse_prefetch(
     ctx: SigningContext,
     executor: ToolExecutor | None = None,
     prev_hash: str | None = None,
+    model_id: str | None = None,
+    prompt_hash: str | None = None,
     pf_image_offset: int = 0,
 ) -> Notarized[list[PrefetchEntry]]:
     """Parse every .pf in `prefetch_dir` and mint a Notarized envelope.
@@ -218,6 +220,8 @@ def parse_prefetch(
             ),
         ),
         prev_hash=prev_hash,
+        model_id=model_id,
+        prompt_hash=prompt_hash,
         ctx=ctx,
     )
 

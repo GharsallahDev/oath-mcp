@@ -162,7 +162,7 @@ python scripts/nss_baseline.py
 
 # Live agent — requires gcloud auth + a Vertex AI-enabled GCP project
 python scripts/nss_baseline.py --live-vertex
-# Expected: TUS@4 = 0.8922 (437/486 list + 18/24 numeric = 455/510 matched)
+# Expected: TUS@4 = 0.9275 (455/486 list + 18/24 numeric = 473/510 matched, gemini-3-flash-preview)
 ```
 
 The published `BenchmarkResult` JSON in `logs/benchmarks/` commits the corpus SHA-256, the run start/finish timestamps, every question's candidate list, and every verifier verdict. `oath verify <envelope_id>` re-derives any single record.

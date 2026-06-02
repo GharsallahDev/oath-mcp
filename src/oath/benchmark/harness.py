@@ -51,6 +51,13 @@ class AgentResponse:
     quarantined_count: int | None = None
     ralph_wiggum_events: int | None = None
 
+    # LLM usage telemetry — captured when the agent is backed by a live model.
+    model_id: str | None = None
+    prompt_token_count: int | None = None
+    candidates_token_count: int | None = None
+    total_token_count: int | None = None
+    thoughts_token_count: int | None = None
+
 
 # A pluggable agent function: (question, k) -> ranked candidates + telemetry.
 BenchmarkAgentFn = Callable[[DfirMetricQuestion, int], AgentResponse]
@@ -176,6 +183,11 @@ class BenchmarkHarness:
                     verified_envelope_count=response.verified_envelope_count,
                     quarantined_count=response.quarantined_count,
                     ralph_wiggum_events=response.ralph_wiggum_events,
+                    model_id=response.model_id,
+                    prompt_token_count=response.prompt_token_count,
+                    candidates_token_count=response.candidates_token_count,
+                    total_token_count=response.total_token_count,
+                    thoughts_token_count=response.thoughts_token_count,
                 )
                 self._append_attempt(attempt)
             attempts.append(attempt)

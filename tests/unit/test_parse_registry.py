@@ -178,6 +178,49 @@ def test_reverify_detects_plugin_pack_drift(ctx, handle, hive_file, plugins_dir)
     assert "plugin pack" in reason.lower()
 
 
+def test_reverify_passes_when_only_plugindetailfile_column_differs(
+    ctx, handle, hive_file, plugins_dir
+):
+    """RECmd's `PluginDetailFile` column carries a non-deterministic
+    `<tmpdir>/<YYYYMMDDHHMMSS>/out_<plugin>.csv` path. Two runs against
+    identical input produce different bytes ONLY in that column. The
+    canonical-form bytes mint and reverify hash MUST be byte-identical
+    when only that column differs — otherwise the parse_registry envelope
+    can never reverify, even on perfectly preserved evidence.
+
+    Regression test for a real bug: previously, mint and reverify hashed
+    the raw CSV including the tmpdir path, so back-to-back runs over the
+    same hive produced different stdout_blake3 values.
+    """
+    sample_with_path = (
+        b"HivePath,HiveType,Description,Category,KeyPath,ValueName,ValueType,"
+        b"ValueData,Comment,LastWriteTimestamp,PluginDetailFile\n"
+        b"C:\\SOFTWARE,SOFTWARE,RunKeys,Persistence,KP,VN,RegSz,VD,c,t,"
+        b"/tmp/A/20260601000000/out_RunKeys.csv\n"
+    )
+    env = parse_registry(
+        handle,
+        hive_path=hive_file,
+        hive_label="SOFTWARE",
+        plugins_dir=plugins_dir,
+        ctx=ctx,
+        executor=FakeExecutor(payload=sample_with_path),
+    )
+    drifted_only_in_path = sample_with_path.replace(
+        b"/tmp/A/20260601000000/", b"/tmp/B/20260601000001/"
+    )
+    ok, reason = reverify(
+        env,
+        hive_path=hive_file,
+        plugins_dir=plugins_dir,
+        executor=FakeExecutor(payload=drifted_only_in_path),
+    )
+    assert ok is True, (
+        f"Spurious BLAKE3 drift on tmpdir-path-only difference: {reason!r}. "
+        "The canonicalization for the PluginDetailFile column is broken."
+    )
+
+
 def test_reverify_detects_stdout_drift(ctx, handle, hive_file, plugins_dir):
     env = parse_registry(
         handle,
