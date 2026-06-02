@@ -240,7 +240,14 @@ def build_solver(ctx: SigningContext, handles_dir: Path):
         handles_by_image[name] = hp.stem
     print(f"  handles available: {list(handles_by_image)}", file=sys.stderr)
 
-    def solve(question: DfirMetricQuestion, k: int, llm_args=None) -> AgentResponse:
+    def solve(
+        question: DfirMetricQuestion,
+        k: int,
+        llm_args=None,
+        *,
+        model_id: str | None = None,
+        prompt_hash: str | None = None,
+    ) -> AgentResponse:
         text = question.question_text
 
         # Image: LLM override or heuristic
@@ -338,6 +345,8 @@ def build_solver(ctx: SigningContext, handles_dir: Path):
                 name_substring="email" if "email" in text.lower() else None,
                 include_deleted=True,
                 ctx=ctx,
+                model_id=model_id,
+                prompt_hash=prompt_hash,
             )
         except Exception as e:
             print(f"  [{question.question_id}] solver error: {e}", file=sys.stderr)

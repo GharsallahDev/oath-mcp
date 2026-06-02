@@ -193,6 +193,8 @@ def vol3_query(
     ctx: SigningContext,
     executor: ToolExecutor | None = None,
     prev_hash: str | None = None,
+    model_id: str | None = None,
+    prompt_hash: str | None = None,
     memdump_image_offset: int = 0,
     symbol_pack_hash: str | None = None,
 ) -> Notarized[Vol3Result]:
@@ -259,6 +261,8 @@ def vol3_query(
             ),
         ),
         prev_hash=prev_hash,
+        model_id=model_id,
+        prompt_hash=prompt_hash,
         ctx=ctx,
     )
 

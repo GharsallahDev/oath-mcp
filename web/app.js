@@ -132,6 +132,9 @@
         '<div class="field"><div class="field-key">envelope_id</div><div class="field-val field-val-mono">' + escapeHtml(env.envelope_id) + '</div></div>' +
         '<div class="field"><div class="field-key">image_sha256</div><div class="field-val field-val-mono">' + escapeHtml(env.image_sha256) + '</div></div>' +
         '<div class="field"><div class="field-key">stdout_blake3</div><div class="field-val field-val-mono">' + escapeHtml(env.stdout_blake3) + '</div></div>' +
+        (env.data_blake3 ? '<div class="field"><div class="field-key">data_blake3</div><div class="field-val field-val-mono">' + escapeHtml(env.data_blake3) + '</div></div>' : '') +
+        '<div class="field"><div class="field-key">model_id <span style="color:var(--text-muted);font-weight:normal">(Daubert binding)</span></div><div class="field-val field-val-mono">' + escapeHtml(env.model_id || '(none — deterministic; no LLM)') + '</div></div>' +
+        '<div class="field"><div class="field-key">prompt_hash <span style="color:var(--text-muted);font-weight:normal">(Daubert binding)</span></div><div class="field-val field-val-mono">' + escapeHtml(env.prompt_hash || '(none — deterministic; no LLM)') + '</div></div>' +
         '<div class="field"><div class="field-key">prev (chain link)</div><div class="field-val field-val-mono">' + escapeHtml(env.prev || '(genesis — first envelope in run)') + '</div></div>' +
         '<div class="field"><div class="field-key">ed25519 signature</div><div class="field-val field-val-mono">' + escapeHtml(env.signature) + '</div></div>' +
         '<div class="field"><div class="field-key">timestamp (UTC)</div><div class="field-val">' + escapeHtml(env.ts) + '</div></div>' +

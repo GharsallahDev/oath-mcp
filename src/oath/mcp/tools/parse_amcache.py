@@ -194,6 +194,8 @@ def parse_amcache(
     ctx: SigningContext,
     executor: ToolExecutor | None = None,
     prev_hash: str | None = None,
+    model_id: str | None = None,
+    prompt_hash: str | None = None,
     amcache_image_offset: int = 0,
 ) -> Notarized[list[AmcacheEntry]]:
     """Extract Amcache.hve entries and mint a Notarized envelope.
@@ -259,6 +261,8 @@ def parse_amcache(
             ),
         ),
         prev_hash=prev_hash,
+        model_id=model_id,
+        prompt_hash=prompt_hash,
         ctx=ctx,
     )
 

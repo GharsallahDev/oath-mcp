@@ -241,3 +241,32 @@ def test_reverify_fails_on_evtx_drift(ctx, handle, evtx_dir, rules_dir):
     )
     assert ok is False
     assert "drift" in reason.lower()
+
+
+def test_reverify_reconstructs_min_level_from_args_canonical(
+    ctx, handle, evtx_dir, rules_dir
+):
+    """If mint used `-m high`, reverify MUST also pass `-m high` — otherwise
+    stdout would always drift on filtered envelopes.
+
+    Regression test for a bug where reverify rebuilt argv with fixed flags
+    and dropped the original min_level.
+    """
+    env = run_hayabusa(
+        handle,
+        evtx_dir=evtx_dir,
+        rules_dir=rules_dir,
+        min_level="high",
+        ctx=ctx,
+        executor=FakeExecutor(payload=SAMPLE_CSV),
+    )
+
+    rv_executor = FakeExecutor(payload=SAMPLE_CSV)
+    ok, reason = reverify(
+        env, evtx_dir=evtx_dir, rules_dir=rules_dir, executor=rv_executor
+    )
+    assert ok is True, reason
+    assert len(rv_executor.calls) == 1
+    argv = rv_executor.calls[0]
+    assert "-m" in argv
+    assert argv[argv.index("-m") + 1] == "high"

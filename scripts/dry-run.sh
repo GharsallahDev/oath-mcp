@@ -5,8 +5,9 @@
 # holds end-to-end from this checkout. Run before submission.
 #
 # What it checks:
-#   1. The full test suite passes (286+ tests, including the spoliation
-#      contract tests)
+#   1. The full test suite passes (297+ tests, including the 14
+#      spoliation contract tests covering data-tampering attacks AND
+#      the Daubert model_id/prompt_hash binding)
 #   2. Every CLI entry point shows the correct help and version
 #   3. `oath verify --logs-dir <path>` lists envelopes from a sample run
 #   4. Every committed sample-run envelope re-verifies (set-equal to
@@ -75,7 +76,7 @@ check "plaso shim psort.py on PATH"       "command -v psort.py"
 
 section "2. Test suite"
 
-check "286+ tests passing" \
+check "297+ tests passing" \
   "PYTHONPATH=src python -m pytest tests/ -q --tb=no 2>&1 | grep -E '[0-9]{3,} passed'"
 
 section "3. CLI surface"
@@ -128,14 +129,21 @@ section "8. Spoliation contract"
 
 check "tests/integration/test_spoliation.py" \
   "[ -s tests/integration/test_spoliation.py ]"
-check "spoliation tests pass" \
-  "PYTHONPATH=src python -m pytest tests/integration/test_spoliation.py -q --tb=no 2>&1 | grep -E '7 passed'"
+check "spoliation tests pass (14 incl. Daubert model_id/prompt_hash binding)" \
+  "PYTHONPATH=src python -m pytest tests/integration/test_spoliation.py -q --tb=no 2>&1 | grep -E '14 passed'"
 
 section "9. Real-evidence demo"
 
 check "scripts/demo.py exists"            "[ -s scripts/demo.py ]"
 check "scripts/demo.py parses cleanly" \
   "PYTHONPATH=src python -c \"import ast; ast.parse(open('scripts/demo.py').read())\""
+check "scripts/show_self_correction.py exists" "[ -s scripts/show_self_correction.py ]"
+check "scripts/show_self_correction.py runs end-to-end" \
+  "PYTHONPATH=src python scripts/show_self_correction.py > /dev/null"
+check "self-correction artifact has ≥1 RalphWiggumEvent" \
+  "[ \$(wc -l < logs/self-correction-demo/ralph-wiggum.jsonl) -ge 1 ]"
+check "self-correction final verdict = verified" \
+  "PYTHONPATH=src python -c \"import json,sys; d=json.load(open('logs/self-correction-demo/outcome.json')); sys.exit(0 if d['final_verdict']['verdict']=='verified' else 1)\""
 
 section "10. SIFT install path"
 

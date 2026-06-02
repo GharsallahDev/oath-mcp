@@ -262,3 +262,19 @@ def test_reverify_fails_when_mount_missing(ctx, handle, tmp_path):
     ok, reason = reverify(env, mount_point=tmp_path / "nonexistent")
     assert ok is False
     assert "missing" in reason.lower()
+
+
+def test_reverify_reconstructs_artifact_class_filter_from_args_canonical(
+    ctx, handle, mount_root
+):
+    """If mint was filtered (e.g. only REGISTRY_HIVE), reverify must walk with
+    the same filter — otherwise an unfiltered re-walk would canonicalize a
+    superset and always fail BLAKE3.
+
+    Regression test for a bug where reverify always walked unfiltered.
+    """
+    env = enumerate_credential_artifacts(
+        handle, artifact_class_filter=[REGISTRY_HIVE], ctx=ctx
+    )
+    ok, reason = reverify(env, mount_point=mount_root)
+    assert ok is True, reason

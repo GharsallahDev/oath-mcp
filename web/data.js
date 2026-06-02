@@ -4,20 +4,23 @@ window.OATH_DATA = {
     "image_filename": "cfreds_2015_data_leakage_pc.E01..E04",
     "image_sha256": "e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9",
     "image_size_bytes": 2147463521,
-    "summary_md": "# OATH sample-run against NIST CFReDS Data Leakage Case\n\n- Image: `cfreds_2015_data_leakage_pc.E01..E04`\n- Image SHA-256: `e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9`\n- Image size: 2,147,463,521 bytes\n- Run id: `dlc-sample-run`\n- Mount tech: raw-file\n\n## Findings\n\n\u2713 **parse_evtx (Security.evtx, auth events)** \u2014 274 records \u00b7 envelope `456064f60c24fd0c...`\n\u2713 **parse_registry (SAM hive \u2014 accounts)** \u2014 20 findings (incl. suspect 'informant' RID 1000) \u00b7 envelope `7f6f31d7cb8d319b...`\n\u2713 **parse_mft (full $MFT, filter='informant')** \u2014 5,347 entries \u00b7 envelope `623fef699579cdd3...`\n\u2713 **parse_usnjrnl ($J, FileDelete, filter='informant')** \u2014 69 delete events for 'informant' \u00b7 28 Outlook OST temp files with suspect email \u00b7 envelope `9b3d1e734d20a685...`\n\u2713 **run_hayabusa (3 EVTX files, level=high)** \u2014 4 high+ Sigma hits \u2014 ATT&CK techniques: T1098, T1543.003 \u00b7 envelope `af57e4465435eb2a...`\n\n## Chain of custody\n\nEach envelope above is signed (ed25519) and chains to the previous via a BLAKE3 prev-hash link. Examiners can re-derive any envelope from this run with:\n\n```bash\noath verify <envelope-id>\n```\n\n## Reproducing this run\n\n```bash\n# After installing OATH (scripts/install-tools.sh or scripts/install-on-sift.sh):\noath mount path/to/cfreds_2015_data_leakage_pc.E01\n# Extract evidence files via icat (see docs/DATASETS.md for the inode list)\npython scripts/export_sample_run.py --handle-id <id-from-oath-mount>\n```"
+    "summary_md": "# OATH sample-run against NIST CFReDS Data Leakage Case\n\n- Image: `cfreds_2015_data_leakage_pc.E01..E04`\n- Image SHA-256: `e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9`\n- Image size: 2,147,463,521 bytes\n- Run id: `dlc-sample-run`\n- Mount tech: raw-file\n\n## Findings\n\n\u2713 **parse_evtx (Security.evtx, auth events)** \u2014 274 records \u00b7 envelope `b5fd542cd28e1836...`\n\u2713 **parse_registry (SAM hive \u2014 accounts)** \u2014 20 findings (incl. suspect 'informant' RID 1000) \u00b7 envelope `d53296e2d0f720fc...`\n\u2713 **parse_mft (full $MFT, filter='informant')** \u2014 5,347 entries \u00b7 envelope `2fad0ab4e4349d82...`\n\u2713 **parse_usnjrnl ($J, FileDelete, filter='informant')** \u2014 69 delete events for 'informant' \u00b7 28 Outlook OST temp files with suspect email \u00b7 envelope `9beed534b2411248...`\n\u2713 **run_hayabusa (3 EVTX files, level=high)** \u2014 4 high+ Sigma hits \u2014 ATT&CK techniques: T1098, T1543.003 \u00b7 envelope `24c2d8f5288a512a...`\n\u2717 **parse_prefetch (skipped on macOS)** \u2014 PECmd 2026.5.0 refuses to run on non-Windows platforms (Windows decompression libraries unavailable). The SIFT install path (`scripts/install-on-sift.sh`) runs it natively on Ubuntu x86_64.\n\u2713 **plaso_supertimeline (super-timeline, description~'informant')** \u2014 18,600 timeline events matching 'informant' across the 766 MB .plaso store \u00b7 envelope `88d277c761935d10...`\n\n## Chain of custody\n\nEach envelope above is signed (ed25519) and chains to the previous via a BLAKE3 prev-hash link. Examiners can re-derive any envelope from this run with:\n\n```bash\noath verify <envelope-id>\n```\n\n## Reproducing this run\n\n```bash\n# After installing OATH (scripts/install-tools.sh or scripts/install-on-sift.sh):\noath mount path/to/cfreds_2015_data_leakage_pc.E01\n# Extract evidence files via icat (see docs/DATASETS.md for the inode list)\npython scripts/export_sample_run.py --handle-id <id-from-oath-mount>\n```"
   },
   "envelopes": [
     {
-      "envelope_id": "456064f60c24fd0c532fa8c6b2ed41c9bfc57c34027c99ca6026fc91b65a051d",
+      "envelope_id": "b5fd542cd28e1836b3c00bd733f52eafe8db7fa2354d4ee6b9e5a6e174f3fb16",
       "tool_name": "parse_evtx",
       "tool_version": "2026.5.0",
       "image_sha256": "e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9",
       "stdout_blake3": "cf3071c25b0e7bdf3700503307be06e693b97f117c0abfdb1efbe54e860ce233",
+      "data_blake3": "2b1ce8bc519b00458f73055c940e9517d7a808424ba15eaba57ce3d08c9a3a8c",
+      "model_id": null,
+      "prompt_hash": null,
       "args_canonical": "{\"channel\":null,\"event_ids\":[4624,4625,4634,4647,4672,4768,4769,4776],\"evtx_image_offset\":0,\"evtx_path\":\"/tmp/oath-dlc/Security.evtx\",\"time_range\":null,\"user_sid\":null}",
       "prev": null,
-      "ts": 1780338368.823082,
+      "ts": 1780428991.122987,
       "run_id": "dlc-sample-run",
-      "signature": "ZpbDoraffeTZBk2EZoZ40ak1ZnPhOZ-U...",
+      "signature": "CzBXkr3WtHnfSbAh4uZYatsL9Qkc0bSE...",
       "n_records": 274,
       "verdict": "VERIFIED",
       "sample_data": [
@@ -78,16 +81,19 @@ window.OATH_DATA = {
       ]
     },
     {
-      "envelope_id": "7f6f31d7cb8d319be9de78aad56b283625aae567871b9f5caaef4fb3ddbe8fc9",
+      "envelope_id": "d53296e2d0f720fcdb8ae814cbd20be141557ca72154287e2d87287abb83a97b",
       "tool_name": "parse_registry",
       "tool_version": "2026.5.0",
       "image_sha256": "e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9",
-      "stdout_blake3": "f5499d1aa8137e9d8cf2bbc09536e3bb48470255fa25c77f9a697aeb4733b4b9",
+      "stdout_blake3": "b13bcd65291d2dee695f5ddeb34980857cf350eece483329c9411ba298e4dd60",
+      "data_blake3": "ffeb8b154768591ca119b0828a883ebb45f4a51d42a122c227224d30617a0f75",
+      "model_id": null,
+      "prompt_hash": null,
       "args_canonical": "{\"hive_image_offset\":0,\"hive_label\":\"SAM\",\"hive_path\":\"/tmp/oath-dlc/SAM\",\"plugin_filter\":null,\"plugin_pack_sha256\":\"62fae253a4e12da9910d1d894b6f95ac930ae9e2abaf8f12948e51dbd933fdac\",\"plugins_dir\":\"/Users/gharsallah/Desktop/RED/.oath-tools/eztools/net9/RECmd/BatchExamples\"}",
-      "prev": "456064f60c24fd0c532fa8c6b2ed41c9bfc57c34027c99ca6026fc91b65a051d",
-      "ts": 1780338369.172468,
+      "prev": "b5fd542cd28e1836b3c00bd733f52eafe8db7fa2354d4ee6b9e5a6e174f3fb16",
+      "ts": 1780428991.418307,
       "run_id": "dlc-sample-run",
-      "signature": "CE7aDRZ95f6LXNTDj1e6CNqEh5okTy2d...",
+      "signature": "lhlZA7RUJ6kDfqv2_vVfekfnpo7ahJcE...",
       "n_records": 20,
       "verdict": "VERIFIED",
       "sample_data": [
@@ -112,8 +118,7 @@ window.OATH_DATA = {
             "Comment": "User accounts in SAM hive",
             "Recursive": "False",
             "Deleted": "False",
-            "LastWriteTimestamp": "2015-03-22 15:53:01.9000353",
-            "PluginDetailFile": "/tmp/claude-501/oath-recmd-g78uuvww/20260601182608/recmd_UserAccounts.csv"
+            "LastWriteTimestamp": "2015-03-22 15:53:01.9000353"
           },
           "hive_image_offset": 0
         },
@@ -138,8 +143,7 @@ window.OATH_DATA = {
             "Comment": "User accounts in SAM hive",
             "Recursive": "False",
             "Deleted": "False",
-            "LastWriteTimestamp": "2015-03-22 15:53:01.9000353",
-            "PluginDetailFile": "/tmp/claude-501/oath-recmd-g78uuvww/20260601182608/recmd_UserAccounts.csv"
+            "LastWriteTimestamp": "2015-03-22 15:53:01.9000353"
           },
           "hive_image_offset": 0
         },
@@ -164,24 +168,26 @@ window.OATH_DATA = {
             "Comment": "User accounts in SAM hive",
             "Recursive": "False",
             "Deleted": "False",
-            "LastWriteTimestamp": "2015-03-22 15:53:01.9000353",
-            "PluginDetailFile": "/tmp/claude-501/oath-recmd-g78uuvww/20260601182608/recmd_UserAccounts.csv"
+            "LastWriteTimestamp": "2015-03-22 15:53:01.9000353"
           },
           "hive_image_offset": 0
         }
       ]
     },
     {
-      "envelope_id": "623fef699579cdd35270a23a367319cefa4d7560abe16dc753b8b008edb8d043",
+      "envelope_id": "2fad0ab4e4349d829b02382f51c4363fd1e2723326ce08ba144120a8cf8b16e3",
       "tool_name": "parse_mft",
       "tool_version": "2026.5.0",
       "image_sha256": "e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9",
       "stdout_blake3": "dcc32e8c8619bb5734de3d42256606a68aa77c7ee34727c480d69fa6918ad1cd",
+      "data_blake3": "4a1f4fb22b1ae1cf3984f4e85f2ebf4db9b036d042564d56078d78d4370b9bb0",
+      "model_id": null,
+      "prompt_hash": null,
       "args_canonical": "{\"filter_path\":\"informant\",\"mft_image_offset\":0,\"mft_path\":\"/tmp/oath-dlc/MFT\",\"since\":null}",
-      "prev": "7f6f31d7cb8d319be9de78aad56b283625aae567871b9f5caaef4fb3ddbe8fc9",
-      "ts": 1780338370.8150258,
+      "prev": "d53296e2d0f720fcdb8ae814cbd20be141557ca72154287e2d87287abb83a97b",
+      "ts": 1780428993.160552,
       "run_id": "dlc-sample-run",
-      "signature": "RrzP9VP5EBWjwQ7axrxopa0laxCZUyHi...",
+      "signature": "7zNBkkrYfFX7iJ00vFxj35aHCxydEn7M...",
       "n_records": 5347,
       "verdict": "VERIFIED",
       "sample_data": [
@@ -263,16 +269,19 @@ window.OATH_DATA = {
       ]
     },
     {
-      "envelope_id": "9b3d1e734d20a6856f85ad4538dbf926f9bd437897db4902e2e140bd8fce1277",
+      "envelope_id": "9beed534b2411248007aec81f5bf6433aa1b2558fe5816dddda3a5b2ff7a991e",
       "tool_name": "parse_usnjrnl",
       "tool_version": "2026.5.0",
       "image_sha256": "e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9",
       "stdout_blake3": "400a87626275f1348c4742ec206997e473aaef59a60d849d8ac733bab3ca2251",
+      "data_blake3": "6e6bcf110480c44c89bd940430a2085fdfaaeb9a0bad1fc8888c0b2bacb02a60",
+      "model_id": null,
+      "prompt_hash": null,
       "args_canonical": "{\"filter_path\":\"informant\",\"j_image_offset\":0,\"j_path\":\"/tmp/oath-dlc/UsnJrnl-J\",\"reason_filter\":[\"FileDelete\"],\"since\":null}",
-      "prev": "623fef699579cdd35270a23a367319cefa4d7560abe16dc753b8b008edb8d043",
-      "ts": 1780338372.6441758,
+      "prev": "2fad0ab4e4349d829b02382f51c4363fd1e2723326ce08ba144120a8cf8b16e3",
+      "ts": 1780428994.988571,
       "run_id": "dlc-sample-run",
-      "signature": "nWk6QLkaiFn3714D_fHhJ8bbBwKscWYe...",
+      "signature": "NdsjE5xCQcDI8BwWVZtmalz4FuIEJypp...",
       "n_records": 69,
       "verdict": "VERIFIED",
       "sample_data": [
@@ -336,16 +345,19 @@ window.OATH_DATA = {
       ]
     },
     {
-      "envelope_id": "af57e4465435eb2ae273863870b32ba2ed0442dd264cfb1fa8749005e094105d",
+      "envelope_id": "24c2d8f5288a512a6262873ec2048ac87b57d7afdbb5c998f4143fe966eed073",
       "tool_name": "run_hayabusa",
       "tool_version": "3.9.0",
       "image_sha256": "e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9",
       "stdout_blake3": "0a963bbbf752ff108ffc8c989e8f46b6e6e011bc62616eb433a6b6f5a3096deb",
+      "data_blake3": "89b18e225077b4b2e7c3de7b5afc87ba093499a1693503ad40d95adaeb6ec493",
+      "model_id": null,
+      "prompt_hash": null,
       "args_canonical": "{\"evtx_dir\":\"/tmp/oath-dlc/EVTX\",\"evtx_image_offset\":0,\"min_level\":\"high\",\"rules_corpus_sha256\":\"afa370bbe2550879e1123baebfd3a8ac8db293d6d4caf5e56d822e17c36304cc\",\"rules_dir\":\"/Users/gharsallah/Desktop/RED/.oath-tools/hayabusa/rules\",\"technique_filter\":null}",
-      "prev": "9b3d1e734d20a6856f85ad4538dbf926f9bd437897db4902e2e140bd8fce1277",
-      "ts": 1780338374.362464,
+      "prev": "9beed534b2411248007aec81f5bf6433aa1b2558fe5816dddda3a5b2ff7a991e",
+      "ts": 1780428996.703889,
       "run_id": "dlc-sample-run",
-      "signature": "UogBWNkX1BPKfMLSL7RWvK6wGqm7vkiJ...",
+      "signature": "3h_3IRqubcAVYpJ4dLRxqHzv10DclBdT...",
       "n_records": 4,
       "verdict": "VERIFIED",
       "sample_data": [
@@ -405,6 +417,79 @@ window.OATH_DATA = {
           "status": "stable",
           "record_id": 1000,
           "details": "SrcSID: S-1-5-21-2425377081-3129163575-2985601102-1002 \u00a6 TgtGrp: Administrators \u00a6 LID: 0x224e3"
+        }
+      ]
+    },
+    {
+      "envelope_id": "88d277c761935d1057ff7ef6c0f5ef167b888d693e5637aadfdbbf1fe9f4dc43",
+      "tool_name": "plaso_supertimeline",
+      "tool_version": "20260512",
+      "image_sha256": "e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9",
+      "stdout_blake3": "37bd9fde4628f2ea03f61a13cffcb7119dd94084db8fe4b81da9eb52f258defd",
+      "data_blake3": "189798e06dfc26198de11bdbad8631b060d6eb036b75eb2c0e4dfed82e83e3fb",
+      "model_id": null,
+      "prompt_hash": null,
+      "args_canonical": "{\"description_substring\":\"informant\",\"parser_filter\":null,\"plaso_path\":\"/Users/gharsallah/Desktop/RED/corpus/data-leakage-case/dlc.plaso\",\"plaso_store_sha256\":\"aa68e806bcdf994a6a45205ed02c15f2a54931aaa9b834bf6a6cd19770734ab3\",\"source_filter\":null,\"time_window_end\":null,\"time_window_start\":null}",
+      "prev": "24c2d8f5288a512a6262873ec2048ac87b57d7afdbb5c998f4143fe966eed073",
+      "ts": 1780430134.118495,
+      "run_id": "dlc-sample-run",
+      "signature": "LBdzrkujfh5P5hMFg9DZR-LRiLM6gtcW...",
+      "n_records": 18600,
+      "verdict": "VERIFIED",
+      "sample_data": [
+        {
+          "timestamp": "1601-01-01T00:00:01",
+          "timestamp_desc": "Metadata Modification Time",
+          "source_short": "FILE",
+          "source_long": "File stat",
+          "parser_name": "filestat",
+          "description": "NTFS:\\Users\\informant\\AppData\\Local\\Microsoft\\Windows\\Temporary Internet Files\\Content.IE5\\BN9SKHUD\\Windows6.1-KB2888049-x64[1].msu Type: file",
+          "user": "-",
+          "hostname": "-",
+          "artifact_path": "NTFS:\\Users\\informant\\AppData\\Local\\Microsoft\\Windows\\Temporary Internet Files\\Content.IE5\\BN9SKHUD\\Windows6.1-KB2888049-x64[1].msu",
+          "inode": 844424930194957,
+          "extra": {
+            "file_size": "2041176",
+            "file_system_type": "NTFS",
+            "is_allocated": "True",
+            "sha256_hash": "359c34a2f690494fc3aedd32a37082d735e63dc23c88e1d0bc05a4a2c235ea9a"
+          }
+        },
+        {
+          "timestamp": "1601-01-01T00:00:01",
+          "timestamp_desc": "Metadata Modification Time",
+          "source_short": "FILE",
+          "source_long": "File stat",
+          "parser_name": "filestat",
+          "description": "NTFS:\\Users\\informant\\AppData\\Local\\Microsoft\\Windows\\Temporary Internet Files\\Content.IE5\\BN9SKHUD\\Windows6.1-KB2533623-x64[1].msu Type: file",
+          "user": "-",
+          "hostname": "-",
+          "artifact_path": "NTFS:\\Users\\informant\\AppData\\Local\\Microsoft\\Windows\\Temporary Internet Files\\Content.IE5\\BN9SKHUD\\Windows6.1-KB2533623-x64[1].msu",
+          "inode": 844424930194958,
+          "extra": {
+            "file_size": "2314805",
+            "file_system_type": "NTFS",
+            "is_allocated": "True",
+            "sha256_hash": "58b8b00113fa8b9657d8da5b14bae93f765f29651c81055e3d127d4a22e5c0d6"
+          }
+        },
+        {
+          "timestamp": "1601-01-01T00:00:01",
+          "timestamp_desc": "Metadata Modification Time",
+          "source_short": "FILE",
+          "source_long": "File stat",
+          "parser_name": "filestat",
+          "description": "NTFS:\\Users\\informant\\AppData\\Local\\Microsoft\\Windows\\Temporary Internet Files\\Content.IE5\\BN9SKHUD\\Windows6.1-KB2729094-v2-x64[1].msu Type: file",
+          "user": "-",
+          "hostname": "-",
+          "artifact_path": "NTFS:\\Users\\informant\\AppData\\Local\\Microsoft\\Windows\\Temporary Internet Files\\Content.IE5\\BN9SKHUD\\Windows6.1-KB2729094-v2-x64[1].msu",
+          "inode": 844424930194953,
+          "extra": {
+            "file_size": "1663018",
+            "file_system_type": "NTFS",
+            "is_allocated": "True",
+            "sha256_hash": "5aa9d02ef6464a136ad3e74692d43734c186c3dbaa492b37e6f69d75faaeead4"
+          }
         }
       ]
     }

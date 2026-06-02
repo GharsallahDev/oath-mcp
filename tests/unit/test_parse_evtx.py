@@ -264,3 +264,36 @@ def test_reverify_fails_when_tool_output_drifts(
     ok, reason = reverify(env, evtx_path=fake_evtx, executor=FakeExecutor(payload=tampered))
     assert ok is False
     assert "drift" in reason.lower()
+
+
+def test_reverify_reconstructs_event_id_filter_from_args_canonical(
+    ctx: SigningContext, handle: EvidenceHandle, fake_evtx: Path
+) -> None:
+    """If mint used --inc, reverify MUST also use --inc — otherwise stdout
+    drifts between mint and verify on every filtered envelope.
+
+    Regression test for a bug where reverify reconstructed the argv with
+    fixed flags and dropped the original --inc / --sd / --ed.
+    """
+    mint_executor = FakeExecutor(payload=SAMPLE_CSV)
+    env = parse_evtx(
+        handle,
+        evtx_path=fake_evtx,
+        event_ids=[4624, 4625],
+        time_range=("2026-04-12T00:00:00Z", "2026-04-13T00:00:00Z"),
+        ctx=ctx,
+        executor=mint_executor,
+    )
+
+    rv_executor = FakeExecutor(payload=SAMPLE_CSV)
+    ok, reason = reverify(env, evtx_path=fake_evtx, executor=rv_executor)
+    assert ok is True, reason
+
+    # Both runs must have invoked EvtxECmd with --inc + --sd + --ed.
+    assert len(rv_executor.calls) == 1
+    argv = rv_executor.calls[0]
+    assert "--inc" in argv
+    assert "--sd" in argv
+    assert "--ed" in argv
+    inc_value = argv[argv.index("--inc") + 1]
+    assert "4624" in inc_value and "4625" in inc_value

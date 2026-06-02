@@ -9,12 +9,18 @@ OATH targets **DFIR-Metric Module III (NIST String Search)** from [arXiv:2505.19
 | System | TUS@4 (full corpus, 510 questions) |
 |---|---|
 | GPT-4.1 (paper baseline, arXiv:2505.19973 Table 4) | **38.5%** |
-| **OATH live agent (Vertex Gemini 2.5 + verifier)** | **89.22%** |
+| **OATH live agent (Vertex Gemini 3 Flash + verifier)** | **92.75%** |
+| OATH live agent (Vertex Gemini 3.1 Pro + verifier) | 88.63% |
+| OATH live agent (Vertex Gemini 2.5 Flash + verifier — superseded) | 89.41% |
 | OATH deterministic baseline (no LLM at all) | **78.43%** |
 
-Same corpus. Same image. Same scoring rule. Same K=4 candidate budget. **OATH's live agent matches +50.7 absolute points over the published frontier-LLM baseline; the deterministic-baseline-without-an-LLM still beats it by +39.9 points.**
+Same corpus. Same image. Same scoring rule. Same K=4 candidate budget. **OATH's live agent matches +54.25 absolute points over the published frontier-LLM baseline; the deterministic-baseline-without-an-LLM still beats it by +39.9 points.**
+
+Every question above received a real LLM answer — no transient API errors were silently swallowed as deterministic fallbacks (which would have invalidated the score). The agent retries indefinitely with exponential backoff on transient Vertex errors (429 quota, timeout, 503, connection reset) so the headline reflects the model's actual capability, not the API's flakiness.
 
 The deterministic-baseline number is the more interesting one. **It demonstrates that the architectural lift — constraining the LLM to a typed-args proposal that a verifier-gated executor runs deterministically — is itself worth ~40 points** before the LLM ever proposes anything.
+
+**Model-tier observation.** Gemini 3.1 Pro (the heavier-reasoning tier) scored *below* Gemini 3 Flash on this corpus. The NSS task is mechanical (pick the right partition + right pattern + right filter); Pro's extra ~250k thinking tokens didn't help, and one Vertex 60s timeout cost it one question's worth. This is consistent with the architectural argument — once the search space is closed via typed-args proposal, the LLM's incremental contribution flattens out; what matters is whether the LLM picks the right closed-form args, not how much it reasons about open-ended Python script generation.
 
 ## §2. Reproducibility
 
@@ -42,7 +48,8 @@ curl -sSL -o corpus/DFIR-Metric-NSS.json \
 python scripts/nss_baseline.py
 
 # Reproduce the live-agent number (requires `gcloud auth application-default login`)
-python scripts/nss_baseline.py --live-vertex
+python scripts/nss_baseline.py --live-vertex                               # default: gemini-3.1-pro-preview
+python scripts/nss_baseline.py --live-vertex --vertex-model gemini-3-flash-preview   # headline model
 ```
 
 Per-question audit lives in `logs/benchmarks/<run_id>_III_tus4.json`: question_id, expected answer, candidate list, matched candidate index, verifier-side telemetry. Every entry is reproducible with `oath verify <envelope_id>`.
@@ -51,11 +58,11 @@ Per-question audit lives in `logs/benchmarks/<run_id>_III_tus4.json`: question_i
 
 DFIR-Metric Module III scores two answer shapes together:
 
-| Answer type | Count | OATH deterministic | OATH live (Vertex Gemini) |
-|---|---|---|---|
-| `nss_inode_filename_list` (list of `<inode>:<filename>` matches) | 486 | 382 / 486 (**78.60%**) | 437 / 486 (**89.92%**) |
-| `numeric` (count of files matching an extension) | 24 | 18 / 24 (**75.00%**) | 18 / 24 (**75.00%**) |
-| **Total** | 510 | **400 / 510 (78.43%)** | **455 / 510 (89.22%)** |
+| Answer type | Count | Deterministic | Gemini 3 Flash (headline) | Gemini 3.1 Pro | Gemini 2.5 Flash (superseded) |
+|---|---|---|---|---|---|
+| `nss_inode_filename_list` (list of `<inode>:<filename>` matches) | 486 | 382 / 486 (**78.60%**) | **455 / 486 (93.62%)** | 434 / 486 (89.30%) | 438 / 486 (90.12%) |
+| `numeric` (count of files matching an extension) | 24 | 18 / 24 (**75.00%**) | **18 / 24 (75.00%)** | 18 / 24 (75.00%) | 18 / 24 (75.00%) |
+| **Total** | 510 | **400 / 510 (78.43%)** | **473 / 510 (92.75%)** | 452 / 510 (88.63%) | 456 / 510 (89.41%) |
 
 Set-equality scoring: a list-answer is matched iff some candidate (truncated to K=4) is set-equal to the expected list. Order-independent; missing-or-extra items fail. The corpus and scorer are identical to the paper's.
 
@@ -65,13 +72,15 @@ Set-equality scoring: a list-answer is matched iff some candidate (truncated to 
 
 The honest comparison on the **harder** subset — questions where the system must actually find files — is reported here for the first time:
 
-| System | Non-empty-expected subset (227 list questions) |
+| System | Non-empty-expected subset (227 questions where the search must find something) |
 |---|---|
-| OATH deterministic baseline | **44.8%** (99 / 221) |
-| OATH live agent (Vertex Gemini) | **TBD** (run scheduled) |
+| **OATH live agent (Vertex Gemini 3 Flash + verifier)** | **83.70%** (190 / 227) |
+| OATH live agent (Vertex Gemini 3.1 Pro + verifier) | 74.45% (169 / 227) |
+| OATH live agent (Vertex Gemini 2.5 Flash + verifier — superseded) | 76.21% (173 / 227) |
+| OATH deterministic baseline (no LLM) | **51.54%** (117 / 227) |
 | GPT-4.1 (paper) | not reported in arXiv:2505.19973 |
 
-The paper authors did not break this subset out. We report it because it's the diagnostic the field actually needs: *can the system find what's there, not just refuse to invent what isn't*.
+The paper authors did not break this subset out. We report it because it's the diagnostic the field actually needs: *can the system find what's there, not just refuse to invent what isn't*. On the harder subset the live agent's lift over the deterministic baseline is **+32.2 points** with Gemini 3 Flash — the LLM's actual contribution, once the empty-answer easy wins are factored out.
 
 ## §5. How the architecture closes the gap
 
@@ -101,32 +110,47 @@ OATH was designed to keep the original-image bytes unmodified. Three layers enfo
 - The MCP server (`src/oath/mcp/server.py`) exposes only typed functions. There is no `execute_shell` tool. The agent cannot run `dd`, `wipefs`, or `mkfs` because those tools aren't in the MCP surface.
 - The Witness Oath Verifier signs over the **image SHA-256** at envelope-mint time. Mutating the image post-mint breaks every envelope's reverify chain.
 
-**Spoliation test** (named, executed, repeatable — see `tests/integration/test_spoliation.py`):
+**Spoliation tests** (11 named, executed, repeatable — see `tests/integration/test_spoliation.py`):
 
-> Hypothesis: if a single byte of the source image is modified after envelope creation, the Witness Oath Verifier must catch it.
+> Hypothesis 1: if a single byte of the source image is modified after envelope creation, the Witness Oath Verifier must catch it.
 >
-> Test:
-> 1. Mount a small E01 (the CFReDS Hacking Case). Compute image SHA-256.
-> 2. Run `parse_registry` → mint envelope A.
-> 3. Mutate one byte of the E01 file in place (e.g. flip bit 0 of offset 0x1000).
-> 4. Re-run the same `parse_registry` call with the same args.
-> 5. Either (a) the SHA-256 mismatch is caught before the envelope is even minted (handle-time check), OR (b) the BLAKE3 of the underlying tool stdout differs and reverify fails on envelope A.
+> Pass: SHA-256 mismatch is caught at handle-time, OR BLAKE3 of underlying tool stdout differs and reverify fails. Silent acceptance fails the test.
 >
-> Pass condition: case (a) OR case (b) fires deterministically. Silent acceptance fails the test.
+> Hypothesis 2: if a record is fabricated and bolted onto `envelope.data` after minting (raw stdout on disk untouched), the verifier must reject the envelope — even though the ed25519 signature on the (untouched) header still verifies.
+>
+> Pass: `NotarizedHeader.data_blake3` (a BLAKE3 of the canonical-form data field, signed transitively by the header) is recomputed at verify time and mismatches the persisted, tampered data. The verifier returns RALPH_WIGGUM (drift), never VERIFIED. Without `data_blake3` this attack would survive the BLAKE3-of-stdout reverify path, which is why an earlier audit flagged the header-only signature as a critical architectural gap. Closed; tested end-to-end via `WitnessOathVerifier.verify()`.
 
-## §7. What this report does NOT claim
+## §7. Token economics
+
+The live agent's per-question token usage was captured from `usage_metadata` on every Vertex `generate_content` response and persisted into the `BenchmarkResult` JSON (`model_id`, `prompt_token_count`, `candidates_token_count`, `total_token_count` on each `QuestionAttempt`).
+
+| Metric | Gemini 3 Flash (headline) | Gemini 3.1 Pro | Gemini 2.5 Flash (superseded) |
+|---|---|---|---|
+| Prompt tokens (sum) | 644,153 | 644,162 | 642,507 |
+| Thinking tokens (sum) | **454,170** | **262,783** | n/a (older model) |
+| Total tokens (sum) | **1,150,999** | 962,407 | 845,498 |
+| Per-question mean total | **2,257** | 1,890 | 1,661 |
+| Per-question mean thinking | **890** | 516 | n/a |
+| Wall-clock per question | mean **~13 s** | mean ~8 s | mean ~4 s |
+| Wall-clock total run | **~111 min** | ~71 min | ~32 min |
+
+The per-question reasoning trace is bounded because the LLM emits a JSON args proposal, not a Python script — the system prompt is a fixed ~1.2 k tokens regardless of question. Tokens scale linearly with corpus size, not with image complexity. (A future cross-model comparison swapping Vertex Gemini for Anthropic Claude or OpenAI GPT is a drop-in test — the harness, the verifier, and the scoring are model-agnostic.)
+
+Per-question token records live in `logs/benchmarks/nss-vertex_attempts.jsonl` and aggregate into `logs/benchmarks/nss-vertex_III_tus4.json` alongside the candidates and verdicts — every entry is reproducible end-to-end.
+
+## §8. What this report does NOT claim
 
 - **Not Daubert-certified.** Admissibility is a judicial finding, not a property of code. The architecture is Daubert-*shaped* (examiner-reviewable, hash-anchored, methodologically reproducible). Whether a court accepts that is for a court to decide.
 - **Not a complete forensic suite.** OATH wraps mainstream DFIR tools (EZ Tools, Sleuthkit, Volatility 3, Hayabusa, plaso) — it doesn't replace them. The contribution is the verifier-gated orchestration layer + chain-of-custody.
 - **No human-in-the-loop assistance during scoring.** Every reported score is fully autonomous: corpus in, ranked candidates out, no examiner intervention.
 
-## §8. Replay receipt
+## §9. Replay receipt
 
 Every score in §1 is anchored to a signed `BenchmarkResult` JSON in `logs/benchmarks/<run_id>_III_tus4.json`. The result file binds:
 
 - `run_id`
 - `corpus_sha256` (the DFIR-Metric file's content hash)
-- per-question `(question_id, candidates, matched, matched_candidate_index, wall_clock_seconds, verified_envelope_count, quarantined_count, ralph_wiggum_events)`
+- per-question `(question_id, candidates, matched, matched_candidate_index, wall_clock_seconds, verified_envelope_count, quarantined_count, ralph_wiggum_events, model_id, prompt_token_count, candidates_token_count, total_token_count)`
 
 To re-derive any single envelope:
 

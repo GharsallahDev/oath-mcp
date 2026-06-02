@@ -19,6 +19,7 @@ Subcommands:
 from __future__ import annotations
 
 import sys
+from typing import Any
 
 import click
 
@@ -69,24 +70,178 @@ def mount(image: str, handles_dir: str) -> None:
 
 
 @main.command()
-@click.option("--hypothesis", multiple=True, help="Optional starting hypothesis (e.g. T1550.002).")
-@click.option(
-    "--handle", default="./.oath/handle.json", help="Path to EvidenceHandle from `oath mount`."
-)
-def triage(hypothesis: tuple[str, ...], handle: str) -> None:
-    """Run autonomous triage on a mounted image.
+@click.option("--hypothesis", multiple=True,
+              help="Restrict to hypotheses whose name contains this substring (repeatable). "
+                   "Default: run every hypothesis in the canonical PtH bundle.")
+@click.option("--logs-dir", type=click.Path(file_okay=False), default="./logs", show_default=True,
+              help="Logs directory containing envelopes + sample-run subdirs.")
+@click.option("--out", type=click.Path(dir_okay=False), default=None,
+              help="Write the TriageReport JSON to this path (else stdout).")
+def triage(hypothesis: tuple[str, ...], logs_dir: str, out: str | None) -> None:
+    """Run hypothesis-driven triage against previously-minted envelopes.
 
     The agent loop:
-      1. Reads the EvidenceHandle.
-      2. Calls the Custom MCP Server's typed functions.
-      3. Proposes claims; the Witness Oath Verifier deterministically
-         re-derives or rejects each.
-      4. On rejection, enters the Ralph Wiggum Loop (visible self-correction).
-      5. Ships findings as Replay Receipts (one-line verifier commands).
+      1. Discovers signed envelopes in --logs-dir (envelopes/ + sample-run/).
+      2. For each hypothesis (default: T1550.002 PtH, T1003.001 LSASS dump,
+         T1070.001 log clearing, T1070.006 timestomp, T1547.001 Run-key
+         persistence), a deterministic propose_fn scans the envelope set for
+         records matching the hypothesis's signature pattern.
+      3. The Witness Oath Verifier re-derives each cited envelope and confirms
+         the predicate matches. Mismatches → QUARANTINED. Re-derive failures
+         → RALPH_WIGGUM, with one visible self-correction attempt.
+      4. Emits a TriageReport (verified / quarantined / gave-up counts +
+         per-hypothesis outcomes).
+
+    To drive triage interactively with a live LLM, instead run
+    `oath serve` and connect via Claude Code over MCP — the typed functions
+    are the same, the proposer is the LLM, the verifier path is identical.
     """
-    click.echo(f"[oath triage] handle={handle}  hypotheses={list(hypothesis) or 'auto'}")
-    click.echo("(not yet implemented)", err=True)
-    sys.exit(2)
+    from pathlib import Path
+    import json as _json
+
+    from oath.agent.runner import AgentRunner, default_pth_hypotheses
+    from oath.mcp.persistence import EnvelopeStore
+    from oath.witness.claim import AgentClaim, ClaimEvidence, FindingType
+    from oath.witness.verifier import WitnessOathVerifier, default_registry
+
+    logs = Path(logs_dir)
+    if not logs.exists():
+        click.echo(f"logs directory missing: {logs_dir}", err=True)
+        sys.exit(2)
+
+    # Re-use the same discovery rule as `oath verify` — envelopes + sample-run.
+    candidate_dirs = [logs / "envelopes", logs / "sample-run"]
+    for child in sorted(logs.iterdir()):
+        if child.is_dir() and child not in candidate_dirs and any(child.glob("*.index")):
+            candidate_dirs.append(child)
+
+    envelopes_by_id: dict[str, Any] = {}
+    reverify_kwargs: dict[str, dict[str, Any]] = {}
+    PATH_KEYS = {
+        "evtx_path", "mft_path", "amcache_path", "prefetch_dir",
+        "hive_path", "plugins_dir", "j_path", "plaso_path",
+        "memdump_path", "evtx_dir", "rules_dir", "mount_point", "image_path",
+    }
+    for env_dir in candidate_dirs:
+        if not env_dir.exists():
+            continue
+        for jsonl_path in sorted(env_dir.glob("*.jsonl")):
+            rid = jsonl_path.stem
+            if not (env_dir / f"{rid}.index").exists():
+                continue
+            store = EnvelopeStore(rid, env_dir)
+            for eid in store._index:
+                env = store.load(eid)
+                envelopes_by_id[eid] = env
+                try:
+                    args = _json.loads(env.header.args_canonical)
+                except Exception:
+                    args = {}
+                inferred = {k: Path(args[k]) if isinstance(args[k], str) else args[k]
+                            for k in PATH_KEYS if k in args and args[k] not in (None, "")}
+                reverify_kwargs[eid] = inferred
+
+    if not envelopes_by_id:
+        click.echo(
+            f"No envelopes under {logs_dir}. Run `oath serve` + drive via Claude Code "
+            "(or `python scripts/demo.py` for a scripted walkthrough) to populate envelopes first.",
+            err=True,
+        )
+        sys.exit(2)
+
+    hypotheses = default_pth_hypotheses()
+    if hypothesis:
+        needles = [h.lower() for h in hypothesis]
+        hypotheses = [h for h in hypotheses if any(n in h.name.lower() for n in needles)]
+        if not hypotheses:
+            click.echo(f"No hypotheses match {list(hypothesis)!r}.", err=True)
+            sys.exit(2)
+
+    # Deterministic propose_fn: scan envelopes for records that fit the
+    # hypothesis's finding type. The LLM-driven proposer (Claude/Gemini) lives
+    # at `oath serve` — same architecture, same verifier — but is not invoked
+    # here. Constraints from previous Ralph Wiggum events are honoured by
+    # excluding their cited envelope_ids.
+    SIGNATURE_BY_FT: dict[FindingType, tuple[str, dict[str, Any]]] = {
+        FindingType.PTH_CANDIDATE: ("parse_evtx", {"event_id": 4624}),
+        FindingType.LSASS_DUMP_CANDIDATE: ("parse_amcache", {}),
+        FindingType.LOG_CLEARING: ("run_hayabusa", {}),
+        FindingType.TIMESTOMP: ("parse_mft", {}),
+        FindingType.REGISTRY_RUN_KEY: ("parse_registry", {}),
+        FindingType.SCHEDULED_TASK: ("parse_evtx", {"event_id": 4698}),
+    }
+    import uuid as _uuid
+
+    def propose(hyp: Any, constraints: list[str]) -> AgentClaim | None:
+        banned: set[str] = set()
+        for c in constraints:
+            for token in c.split():
+                if token.startswith("envelope:"):
+                    banned.add(token.split(":", 1)[1].rstrip(",;."))
+        tool, baseline_pred = SIGNATURE_BY_FT.get(hyp.finding_type, (None, None))
+        if tool is None:
+            return None
+        for eid, env in envelopes_by_id.items():
+            if eid in banned:
+                continue
+            if env.header.tool_name != tool:
+                continue
+            data_list = list(env.data) if isinstance(env.data, (list, tuple)) else []
+            if not data_list:
+                continue
+            first = data_list[0]
+            d = first.model_dump() if hasattr(first, "model_dump") else dict(first)
+            predicate = dict(baseline_pred) if baseline_pred else {}
+            # Pick a stable identifier field if available — most typed records
+            # expose one of these keys we can pin the predicate to.
+            for k in ("event_record_id", "record_number", "entry_number",
+                      "usn", "sha1", "name", "rule_title",
+                      "key_path", "value_name", "plugin"):
+                if k in d and d[k] not in (None, ""):
+                    predicate[k] = d[k]
+                    break
+            if not predicate:
+                continue
+            return AgentClaim(
+                claim_id=f"triage-{_uuid.uuid4().hex[:12]}",
+                finding_type=hyp.finding_type,
+                natural_language=(
+                    f"{hyp.name}: matched record via deterministic envelope scan "
+                    f"(tool={tool}, envelope={eid})."
+                ),
+                supporting_evidence=(
+                    ClaimEvidence(envelope_id=eid, record_predicate=predicate),
+                ),
+                confidence=0.7,
+                reasoning_hash="0" * 64,
+                model_id="oath-triage-deterministic",
+                temperature=0.0,
+                seed=0,
+            )
+        return None
+
+    verifier = WitnessOathVerifier(
+        envelopes_by_id=envelopes_by_id,
+        reverify_kwargs=reverify_kwargs,
+        registry=default_registry(),
+    )
+    runner = AgentRunner(
+        verifier=verifier,
+        propose_fn=propose,
+        run_id="cli-triage",
+    )
+    report = runner.run_all(hypotheses)
+
+    payload = _json.dumps(_json.loads(report.model_dump_json()), indent=2)
+    if out:
+        Path(out).write_text(payload, encoding="utf-8")
+        click.echo(
+            f"triage report → {out}  "
+            f"({report.verified_count} verified, {report.quarantined_count} quarantined, "
+            f"{report.gave_up_count} gave up, {report.total_ralph_wiggum_events} RW events)"
+        )
+    else:
+        click.echo(payload)
 
 
 @main.command()
@@ -121,38 +276,61 @@ def verify(envelope_id: str | None, logs_dir: str, kwargs_json: str | None) -> N
     import json as _json
 
     logs = Path(logs_dir)
-    envelopes_dir = logs / "envelopes"
-    if not envelopes_dir.exists():
-        click.echo(f"No envelopes/ under {logs_dir}.", err=True)
+    if not logs.exists():
+        click.echo(f"logs directory missing: {logs_dir}", err=True)
         sys.exit(2)
 
     from oath.mcp.persistence import EnvelopeStore
     from oath.receipt.notarized import Notarized
     from oath.witness.verifier import default_registry
 
-    # Discover all known runs (one JSONL per run_id).
-    run_ids = sorted(p.stem for p in envelopes_dir.glob("*.jsonl"))
+    # Discover all known runs across the logs tree. Each run is a (.jsonl, .index)
+    # pair under a subdir of logs/. We accept BOTH the canonical
+    # `logs/envelopes/<run_id>.jsonl` layout AND the demo/sample-run layout
+    # at `logs/sample-run/<run_id>.jsonl` — without this, real signed envelopes
+    # from the bundled sample run are invisible to `oath verify`.
+    runs: list[tuple[str, Path]] = []  # (run_id, envelopes_dir)
+    candidate_dirs = [
+        logs / "envelopes",
+        logs / "sample-run",
+    ]
+    # Also auto-discover any other subdir of logs/ that contains paired
+    # .jsonl + .index files — keeps the door open for additional named runs.
+    for child in sorted(logs.iterdir()):
+        if child.is_dir() and child not in candidate_dirs and any(child.glob("*.index")):
+            candidate_dirs.append(child)
+
+    for env_dir in candidate_dirs:
+        if not env_dir.exists():
+            continue
+        for jsonl_path in sorted(env_dir.glob("*.jsonl")):
+            if (env_dir / f"{jsonl_path.stem}.index").exists():
+                runs.append((jsonl_path.stem, env_dir))
 
     if envelope_id is None:
-        if not run_ids:
+        if not runs:
             click.echo("(no envelopes recorded)")
             return
         click.echo("Known envelope IDs:")
-        for rid in run_ids:
-            store = EnvelopeStore(rid, envelopes_dir)
+        for rid, env_dir in runs:
+            store = EnvelopeStore(rid, env_dir)
             for eid in sorted(store._index.keys()):
-                click.echo(f"  {rid}/{eid}")
+                click.echo(f"  {env_dir.name}/{rid}/{eid}")
         return
 
-    # Look up the envelope across every run.
+    # Look up the envelope across every discovered run.
     envelope = None
-    for rid in run_ids:
-        store = EnvelopeStore(rid, envelopes_dir)
+    for rid, env_dir in runs:
+        store = EnvelopeStore(rid, env_dir)
         if envelope_id in store._index:
             envelope = store.load(envelope_id)
             break
     if envelope is None:
-        click.echo(f"envelope not found: {envelope_id} (searched {len(run_ids)} run(s))", err=True)
+        click.echo(
+            f"envelope not found: {envelope_id} (searched {len(runs)} run(s) "
+            f"across {len([d for d in candidate_dirs if d.exists()])} envelope dir(s))",
+            err=True,
+        )
         sys.exit(2)
 
     # Resolve per-envelope kwargs. Two sources, merged left-to-right:
@@ -361,16 +539,40 @@ def benchmark(
 
 
 @main.command()
-@click.option("--transport", type=click.Choice(["stdio", "http"]), default="stdio")
-@click.option("--port", default=8765, type=int)
-def serve(transport: str, port: int) -> None:
+@click.option("--transport", type=click.Choice(["stdio", "http"]), default="stdio", show_default=True)
+@click.option("--port", default=8765, type=int, show_default=True,
+              help="Port for HTTP transport (ignored for stdio).")
+@click.option("--logs-dir", type=click.Path(file_okay=False), default="./logs", show_default=True)
+@click.option("--keys-dir", type=click.Path(file_okay=False), default="./keys", show_default=True)
+@click.option("--run-id", default=None,
+              help="Resume an existing run_id (otherwise a fresh UUID is minted).")
+def serve(transport: str, port: int, logs_dir: str, keys_dir: str, run_id: str | None) -> None:
     """Boot the Custom MCP Server so Claude Code can connect to it.
 
-    Exposes 11 typed forensic functions, each returning Notarized<T>.
+    Exposes 11 typed forensic functions, each returning Notarized<T>. The
+    server reads/writes envelopes under --logs-dir/envelopes/ and signs them
+    with the keypair under --keys-dir (minted on first run).
     """
-    click.echo(f"[oath serve] transport={transport}  port={port}")
-    click.echo("(not yet implemented)", err=True)
-    sys.exit(2)
+    if transport != "stdio":
+        click.echo(
+            f"transport={transport!r} not yet supported by `oath serve` — only stdio. "
+            "Run the server behind any MCP-capable HTTP gateway (e.g. `mcpo`) for HTTP.",
+            err=True,
+        )
+        sys.exit(2)
+
+    from pathlib import Path
+
+    from oath.mcp.server import main as mcp_main
+
+    argv = ["--logs-dir", logs_dir, "--keys-dir", keys_dir]
+    if run_id:
+        argv += ["--run-id", run_id]
+    click.echo(
+        f"[oath serve] booting MCP server (stdio) — logs={logs_dir} keys={keys_dir}",
+        err=True,
+    )
+    sys.exit(mcp_main(argv))
 
 
 if __name__ == "__main__":

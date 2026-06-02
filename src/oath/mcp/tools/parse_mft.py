@@ -230,6 +230,8 @@ def parse_mft(
     ctx: SigningContext,
     executor: ToolExecutor | None = None,
     prev_hash: str | None = None,
+    model_id: str | None = None,
+    prompt_hash: str | None = None,
     mft_image_offset: int = 0,
 ) -> Notarized[list[MftEntry]]:
     """Extract $MFT entries and return a Notarized envelope.
@@ -290,6 +292,8 @@ def parse_mft(
             ),
         ),
         prev_hash=prev_hash,
+        model_id=model_id,
+        prompt_hash=prompt_hash,
         ctx=ctx,
     )
 

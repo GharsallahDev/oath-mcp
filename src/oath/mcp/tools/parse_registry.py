@@ -132,6 +132,55 @@ def _hash_plugin_pack(plugins_dir: Path) -> str:
 
 
 # --------------------------------------------------------------------------- #
+# RECmd CSV canonicalization                                                  #
+# --------------------------------------------------------------------------- #
+
+
+def _canonicalize_recmd_csv(csv_bytes: bytes) -> bytes:
+    """Strip RECmd's non-deterministic columns from the CSV before hashing.
+
+    RECmd 2026.5.0 includes a `PluginDetailFile` column whose value is the
+    absolute path of the per-plugin output CSV — which itself includes a
+    run-specific timestamp directory the tool created internally
+    (`<tmpdir>/<YYYYMMDDHHMMSS>/out_<plugin>.csv`). That makes back-to-back
+    runs over identical input produce different bytes — BLAKE3 of stdout
+    diverges spuriously between mint and reverify even though every other
+    forensic field is identical.
+
+    This canonicalization drops the column entirely so the bytes we hash
+    depend only on the actual forensic content. The same function is called
+    by both `parse_registry()` (mint) and `reverify()` so the BLAKE3 values
+    they compute are over byte-identical canonical inputs.
+
+    The `RawValues` column may also embed `PluginDetailFile`-style tokens
+    inside its serialized blob; we don't currently scrub those because
+    `RECmd` only emits the absolute path in the dedicated column. If a
+    future RECmd version introduces additional non-deterministic content,
+    add it to the list of dropped columns here.
+    """
+    if not csv_bytes:
+        return csv_bytes
+    text = csv_bytes.decode("utf-8-sig", errors="replace")
+    reader = csv.reader(io.StringIO(text))
+    rows = list(reader)
+    if not rows:
+        return csv_bytes
+    header = rows[0]
+    drop_cols = [i for i, h in enumerate(header) if h.strip() == "PluginDetailFile"]
+    if not drop_cols:
+        return csv_bytes  # nothing to scrub; already deterministic
+    keep = [i for i in range(len(header)) if i not in set(drop_cols)]
+    buf = io.StringIO()
+    writer = csv.writer(buf, lineterminator="\n")
+    for row in rows:
+        # Pad short rows with empty strings so column indexing never out-of-range.
+        if len(row) < len(header):
+            row = list(row) + [""] * (len(header) - len(row))
+        writer.writerow([row[i] for i in keep])
+    return buf.getvalue().encode("utf-8")
+
+
+# --------------------------------------------------------------------------- #
 # Parser                                                                      #
 # --------------------------------------------------------------------------- #
 
@@ -195,6 +244,8 @@ def parse_registry(
     ctx: SigningContext,
     executor: ToolExecutor | None = None,
     prev_hash: str | None = None,
+    model_id: str | None = None,
+    prompt_hash: str | None = None,
     hive_image_offset: int = 0,
 ) -> Notarized[list[RegistryFinding]]:
     """Parse a registry hive with RECmd batch-plugin mode.
@@ -253,7 +304,10 @@ def parse_registry(
             "--csvf", out_csv.name,
         ]
         executor.run(argv)
-        stdout_bytes = out_csv.read_bytes() if out_csv.exists() else b""
+        raw_csv = out_csv.read_bytes() if out_csv.exists() else b""
+    # Scrub the non-deterministic PluginDetailFile column from RECmd's CSV
+    # so mint and reverify produce byte-identical bytes for identical input.
+    stdout_bytes = _canonicalize_recmd_csv(raw_csv)
     findings = _parse_recmd_csv(
         stdout_bytes,
         hive_label=hive_label,
@@ -276,6 +330,8 @@ def parse_registry(
             ),
         ),
         prev_hash=prev_hash,
+        model_id=model_id,
+        prompt_hash=prompt_hash,
         ctx=ctx,
     )
 
@@ -321,7 +377,10 @@ def reverify(
             executor.run(argv)
         except Exception as e:
             return False, f"RECmd re-run failed: {e}"
-        stdout_bytes = out_csv.read_bytes() if out_csv.exists() else b""
+        raw_csv = out_csv.read_bytes() if out_csv.exists() else b""
+    # Identical canonicalization to the mint path — both hash the same
+    # forensic-content-only bytes.
+    stdout_bytes = _canonicalize_recmd_csv(raw_csv)
     actual = blake3.blake3(stdout_bytes).hexdigest()
     expected = envelope.header.stdout_blake3
     if actual != expected:
