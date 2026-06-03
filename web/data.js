@@ -4,11 +4,11 @@ window.OATH_DATA = {
     "image_filename": "cfreds_2015_data_leakage_pc.E01..E04",
     "image_sha256": "e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9",
     "image_size_bytes": 2147463521,
-    "summary_md": "# OATH sample-run against NIST CFReDS Data Leakage Case\n\n- Image: `cfreds_2015_data_leakage_pc.E01..E04`\n- Image SHA-256: `e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9`\n- Image size: 2,147,463,521 bytes\n- Run id: `dlc-sample-run`\n- Mount tech: raw-file\n\n## Findings\n\n\u2713 **parse_evtx (Security.evtx, auth events)** \u2014 274 records \u00b7 envelope `b5fd542cd28e1836...`\n\u2713 **parse_registry (SAM hive \u2014 accounts)** \u2014 20 findings (incl. suspect 'informant' RID 1000) \u00b7 envelope `d53296e2d0f720fc...`\n\u2713 **parse_mft (full $MFT, filter='informant')** \u2014 5,347 entries \u00b7 envelope `2fad0ab4e4349d82...`\n\u2713 **parse_usnjrnl ($J, FileDelete, filter='informant')** \u2014 69 delete events for 'informant' \u00b7 28 Outlook OST temp files with suspect email \u00b7 envelope `9beed534b2411248...`\n\u2713 **run_hayabusa (3 EVTX files, level=high)** \u2014 4 high+ Sigma hits \u2014 ATT&CK techniques: T1098, T1543.003 \u00b7 envelope `24c2d8f5288a512a...`\n\u2717 **parse_prefetch (skipped on macOS)** \u2014 PECmd 2026.5.0 refuses to run on non-Windows platforms (Windows decompression libraries unavailable). The SIFT install path (`scripts/install-on-sift.sh`) runs it natively on Ubuntu x86_64.\n\u2713 **plaso_supertimeline (super-timeline, description~'informant')** \u2014 18,600 timeline events matching 'informant' across the 766 MB .plaso store \u00b7 envelope `88d277c761935d10...`\n\n## Chain of custody\n\nEach envelope above is signed (ed25519) and chains to the previous via a BLAKE3 prev-hash link. Examiners can re-derive any envelope from this run with:\n\n```bash\noath verify <envelope-id>\n```\n\n## Reproducing this run\n\n```bash\n# After installing OATH (scripts/install-tools.sh or scripts/install-on-sift.sh):\noath mount path/to/cfreds_2015_data_leakage_pc.E01\n# Extract evidence files via icat (see docs/DATASETS.md for the inode list)\npython scripts/export_sample_run.py --handle-id <id-from-oath-mount>\n```"
+    "summary_md": "# OATH sample-run against NIST CFReDS Data Leakage Case\n\n- Image: `cfreds_2015_data_leakage_pc.E01..E04`\n- Image SHA-256: `e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9`\n- Image size: 2,147,463,521 bytes\n- Run id: `dlc-sample-run`\n- Mount tech: raw-file\n\n## Findings\n\n\u2713 **parse_evtx (Security.evtx, auth events)** \u2014 274 records \u00b7 envelope `2c52d6bed5b330e2...`\n\u2713 **parse_registry (SAM hive \u2014 accounts)** \u2014 20 findings (incl. suspect 'informant' RID 1000) \u00b7 envelope `41f00830063b1e1d...`\n\u2713 **parse_mft (full $MFT, filter='informant')** \u2014 5,347 entries \u00b7 envelope `b818ceef636ad27b...`\n\u2713 **parse_usnjrnl ($J, FileDelete, filter='informant')** \u2014 69 delete events for 'informant' \u00b7 28 Outlook OST temp files with suspect email \u00b7 envelope `cdbfa6328656556e...`\n\u2713 **run_hayabusa (3 EVTX files, level=high)** \u2014 4 high+ Sigma hits \u2014 ATT&CK techniques: T1098, T1543.003 \u00b7 envelope `0ec0f2db9cab48a7...`\n\u2717 **parse_prefetch (skipped on macOS)** \u2014 PECmd 2026.5.0 refuses to run on non-Windows platforms (Windows decompression libraries unavailable). The SIFT install path (`scripts/install-on-sift.sh`) runs it natively on Ubuntu x86_64.\n\u2713 **plaso_supertimeline (super-timeline, description~'informant')** \u2014 18,600 timeline events matching 'informant' across the 766 MB .plaso store \u00b7 envelope `e37d0ec47c042d17...`\n\n## Chain of custody\n\nEach envelope above is signed (ed25519) and chains to the previous via a BLAKE3 prev-hash link. Examiners can re-derive any envelope from this run with:\n\n```bash\noath verify <envelope-id>\n```\n\n## Reproducing this run\n\n```bash\n# After installing OATH (scripts/install-tools.sh or scripts/install-on-sift.sh):\noath mount path/to/cfreds_2015_data_leakage_pc.E01\n# Extract evidence files via icat (see docs/DATASETS.md for the inode list)\npython scripts/export_sample_run.py --handle-id <id-from-oath-mount>\n```"
   },
   "envelopes": [
     {
-      "envelope_id": "b5fd542cd28e1836b3c00bd733f52eafe8db7fa2354d4ee6b9e5a6e174f3fb16",
+      "envelope_id": "2c52d6bed5b330e212ae1123056e4f5224a67034e4d09e39bc97b5245cb2f2b6",
       "tool_name": "parse_evtx",
       "tool_version": "2026.5.0",
       "image_sha256": "e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9",
@@ -18,9 +18,9 @@ window.OATH_DATA = {
       "prompt_hash": null,
       "args_canonical": "{\"channel\":null,\"event_ids\":[4624,4625,4634,4647,4672,4768,4769,4776],\"evtx_image_offset\":0,\"evtx_path\":\"/tmp/oath-dlc/Security.evtx\",\"time_range\":null,\"user_sid\":null}",
       "prev": null,
-      "ts": 1780428991.122987,
+      "ts": 1780519089.252892,
       "run_id": "dlc-sample-run",
-      "signature": "CzBXkr3WtHnfSbAh4uZYatsL9Qkc0bSE...",
+      "signature": "WpILqwVMFEUeVOn9DHAatZ_isD583RfJ...",
       "n_records": 274,
       "verdict": "VERIFIED",
       "sample_data": [
@@ -81,7 +81,7 @@ window.OATH_DATA = {
       ]
     },
     {
-      "envelope_id": "d53296e2d0f720fcdb8ae814cbd20be141557ca72154287e2d87287abb83a97b",
+      "envelope_id": "41f00830063b1e1d2d19109cb53eb26644dd89114e761882cf902a9a37501877",
       "tool_name": "parse_registry",
       "tool_version": "2026.5.0",
       "image_sha256": "e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9",
@@ -90,10 +90,10 @@ window.OATH_DATA = {
       "model_id": null,
       "prompt_hash": null,
       "args_canonical": "{\"hive_image_offset\":0,\"hive_label\":\"SAM\",\"hive_path\":\"/tmp/oath-dlc/SAM\",\"plugin_filter\":null,\"plugin_pack_sha256\":\"62fae253a4e12da9910d1d894b6f95ac930ae9e2abaf8f12948e51dbd933fdac\",\"plugins_dir\":\"/Users/gharsallah/Desktop/RED/.oath-tools/eztools/net9/RECmd/BatchExamples\"}",
-      "prev": "b5fd542cd28e1836b3c00bd733f52eafe8db7fa2354d4ee6b9e5a6e174f3fb16",
-      "ts": 1780428991.418307,
+      "prev": "2c52d6bed5b330e212ae1123056e4f5224a67034e4d09e39bc97b5245cb2f2b6",
+      "ts": 1780519089.665289,
       "run_id": "dlc-sample-run",
-      "signature": "lhlZA7RUJ6kDfqv2_vVfekfnpo7ahJcE...",
+      "signature": "grPUygVVmrwZOnKValx1LKd9xZQ3Kg0o...",
       "n_records": 20,
       "verdict": "VERIFIED",
       "sample_data": [
@@ -175,7 +175,7 @@ window.OATH_DATA = {
       ]
     },
     {
-      "envelope_id": "2fad0ab4e4349d829b02382f51c4363fd1e2723326ce08ba144120a8cf8b16e3",
+      "envelope_id": "b818ceef636ad27b72865e97bd28a384231a305f9a27dca3ae03cca8a305793f",
       "tool_name": "parse_mft",
       "tool_version": "2026.5.0",
       "image_sha256": "e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9",
@@ -184,10 +184,10 @@ window.OATH_DATA = {
       "model_id": null,
       "prompt_hash": null,
       "args_canonical": "{\"filter_path\":\"informant\",\"mft_image_offset\":0,\"mft_path\":\"/tmp/oath-dlc/MFT\",\"since\":null}",
-      "prev": "d53296e2d0f720fcdb8ae814cbd20be141557ca72154287e2d87287abb83a97b",
-      "ts": 1780428993.160552,
+      "prev": "41f00830063b1e1d2d19109cb53eb26644dd89114e761882cf902a9a37501877",
+      "ts": 1780519091.317577,
       "run_id": "dlc-sample-run",
-      "signature": "7zNBkkrYfFX7iJ00vFxj35aHCxydEn7M...",
+      "signature": "jSxqq762CI36CxADVRAdSzK4cjx_mwY0...",
       "n_records": 5347,
       "verdict": "VERIFIED",
       "sample_data": [
@@ -269,7 +269,7 @@ window.OATH_DATA = {
       ]
     },
     {
-      "envelope_id": "9beed534b2411248007aec81f5bf6433aa1b2558fe5816dddda3a5b2ff7a991e",
+      "envelope_id": "cdbfa6328656556e522f8bf6c3b74fac8d6367837068f23b84d749f49917e989",
       "tool_name": "parse_usnjrnl",
       "tool_version": "2026.5.0",
       "image_sha256": "e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9",
@@ -278,10 +278,10 @@ window.OATH_DATA = {
       "model_id": null,
       "prompt_hash": null,
       "args_canonical": "{\"filter_path\":\"informant\",\"j_image_offset\":0,\"j_path\":\"/tmp/oath-dlc/UsnJrnl-J\",\"reason_filter\":[\"FileDelete\"],\"since\":null}",
-      "prev": "2fad0ab4e4349d829b02382f51c4363fd1e2723326ce08ba144120a8cf8b16e3",
-      "ts": 1780428994.988571,
+      "prev": "b818ceef636ad27b72865e97bd28a384231a305f9a27dca3ae03cca8a305793f",
+      "ts": 1780519093.0698738,
       "run_id": "dlc-sample-run",
-      "signature": "NdsjE5xCQcDI8BwWVZtmalz4FuIEJypp...",
+      "signature": "DWJp91RVuYufXoKCqiY34r81A7oEZtCV...",
       "n_records": 69,
       "verdict": "VERIFIED",
       "sample_data": [
@@ -345,7 +345,7 @@ window.OATH_DATA = {
       ]
     },
     {
-      "envelope_id": "24c2d8f5288a512a6262873ec2048ac87b57d7afdbb5c998f4143fe966eed073",
+      "envelope_id": "0ec0f2db9cab48a7df3a6cadff63b4494e9c3133932781da9123a6f2c3ef8959",
       "tool_name": "run_hayabusa",
       "tool_version": "3.9.0",
       "image_sha256": "e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9",
@@ -354,10 +354,10 @@ window.OATH_DATA = {
       "model_id": null,
       "prompt_hash": null,
       "args_canonical": "{\"evtx_dir\":\"/tmp/oath-dlc/EVTX\",\"evtx_image_offset\":0,\"min_level\":\"high\",\"rules_corpus_sha256\":\"afa370bbe2550879e1123baebfd3a8ac8db293d6d4caf5e56d822e17c36304cc\",\"rules_dir\":\"/Users/gharsallah/Desktop/RED/.oath-tools/hayabusa/rules\",\"technique_filter\":null}",
-      "prev": "9beed534b2411248007aec81f5bf6433aa1b2558fe5816dddda3a5b2ff7a991e",
-      "ts": 1780428996.703889,
+      "prev": "cdbfa6328656556e522f8bf6c3b74fac8d6367837068f23b84d749f49917e989",
+      "ts": 1780519095.060986,
       "run_id": "dlc-sample-run",
-      "signature": "3h_3IRqubcAVYpJ4dLRxqHzv10DclBdT...",
+      "signature": "mAq2yJiW1sM07UITeNL9tXs53-gduo8f...",
       "n_records": 4,
       "verdict": "VERIFIED",
       "sample_data": [
@@ -421,19 +421,19 @@ window.OATH_DATA = {
       ]
     },
     {
-      "envelope_id": "88d277c761935d1057ff7ef6c0f5ef167b888d693e5637aadfdbbf1fe9f4dc43",
+      "envelope_id": "e37d0ec47c042d1799213bf12d22a9e69a947296112df4d4f07207ff624324c7",
       "tool_name": "plaso_supertimeline",
       "tool_version": "20260512",
       "image_sha256": "e6365e44f1004252171acb73e6779be05277cbd57d09d7febed22d2463a956a9",
-      "stdout_blake3": "37bd9fde4628f2ea03f61a13cffcb7119dd94084db8fe4b81da9eb52f258defd",
+      "stdout_blake3": "2c90dca5786aeddf488ff3375c43c5a8d6f8e746a8cba78c011ae4d5d8e4fce8",
       "data_blake3": "189798e06dfc26198de11bdbad8631b060d6eb036b75eb2c0e4dfed82e83e3fb",
       "model_id": null,
       "prompt_hash": null,
       "args_canonical": "{\"description_substring\":\"informant\",\"parser_filter\":null,\"plaso_path\":\"/Users/gharsallah/Desktop/RED/corpus/data-leakage-case/dlc.plaso\",\"plaso_store_sha256\":\"aa68e806bcdf994a6a45205ed02c15f2a54931aaa9b834bf6a6cd19770734ab3\",\"source_filter\":null,\"time_window_end\":null,\"time_window_start\":null}",
-      "prev": "24c2d8f5288a512a6262873ec2048ac87b57d7afdbb5c998f4143fe966eed073",
-      "ts": 1780430134.118495,
+      "prev": "0ec0f2db9cab48a7df3a6cadff63b4494e9c3133932781da9123a6f2c3ef8959",
+      "ts": 1780520204.458273,
       "run_id": "dlc-sample-run",
-      "signature": "LBdzrkujfh5P5hMFg9DZR-LRiLM6gtcW...",
+      "signature": "vHnoN3t9NGMkDHU0mq-1G7zoWZcsI9QB...",
       "n_records": 18600,
       "verdict": "VERIFIED",
       "sample_data": [

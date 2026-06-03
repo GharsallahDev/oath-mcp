@@ -78,11 +78,24 @@ def test_agent_fn_routes_args_to_executor():
     assert captured[0].image == "ss-win-07-25-18.dd"
 
 
-def test_agent_fn_falls_back_when_vertex_errors():
+def test_agent_fn_propagates_when_interactor_raises_nontransient():
+    """When the interactor raises a non-transient error (the only thing
+    that should escape its own retry-forever-on-transient loop), agent_fn
+    MUST propagate it — not silently fall back to deterministic. Silent
+    fallback would mix LLM-driven and deterministic attempts in the same
+    benchmark run without flagging the difference, corrupting the score.
+    The harness's resumable-attempts JSONL means a re-run after operator
+    intervention picks up exactly the unanswered question.
+    """
+    import pytest as _pytest
+
     fallback_called: list[LLMArgs | None] = []
 
     def broken_interactor(_cfg, _sys, _usr):
-        raise RuntimeError("vertex unavailable")
+        # A non-transient error — e.g. auth, permanent quota, malformed request.
+        # The interactor's transient-retry loop has already exhausted; this is
+        # the operator-intervention signal.
+        raise RuntimeError("permanent vertex auth failure")
 
     def fake_executor(_q, _k, args, **_kw):
         fallback_called.append(args)
@@ -93,9 +106,10 @@ def test_agent_fn_falls_back_when_vertex_errors():
         config=GeminiNSSConfig(),
         interactor=broken_interactor,
     )
-    response = agent_fn(_q(), 4)
-    assert response.candidates == ["[]"]
-    assert fallback_called == [None]
+    with _pytest.raises(RuntimeError, match="permanent vertex auth failure"):
+        agent_fn(_q(), 4)
+    # The deterministic executor must NOT be called.
+    assert fallback_called == []
 
 
 def test_agent_fn_falls_back_when_llm_emits_garbage():

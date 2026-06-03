@@ -34,13 +34,15 @@ envelope is reproducible only against the same store + same source image.
 The Witness Oath Verifier re-runs psort with the same filter and confirms
 the BLAKE3 of stdout matches. Plaso is deterministic for fixed input +
 fixed parser versions; psort sorts on (timestamp, parser_name) which is a
-total order, so byte-identical re-runs are achievable.
+total order, so byte-identical re-runs are achievable AFTER we canonicalize
+the output (see `_canonicalize_psort_csv` below).
 """
 from __future__ import annotations
 
 import csv
 import hashlib
 import io
+import re
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -128,6 +130,33 @@ def hash_plaso_store(plaso_path: Path) -> str:
         for chunk in iter(lambda: f.read(4 * 1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+# psort.py's l2tcsv writer leaks Python object memory addresses via repr()
+# on internal AttributeContainerIdentifier and Filetime objects. Each run
+# allocates these objects at different addresses, so back-to-back identical
+# psort invocations produce CSVs that differ in ~30 rows out of ~1.4M —
+# enough to break a stdout BLAKE3 match. The leak is upstream (plaso's
+# event-tagging layer); we cannot patch it without forking plaso.
+#
+# The forensic content of each row is identical between runs (same events,
+# same timestamps, same parsers, same evidence offsets). We replace every
+# `<...module.Class object at 0xHEX>` literal with a canonical sentinel
+# before BLAKE3-ing. Both mint and reverify apply the same scrub, so the
+# resulting hashes match while preserving every byte of actual forensic
+# content. Tested end-to-end against the DLC 766 MB .plaso store.
+_PSORT_OBJECT_ADDR_RE = re.compile(rb"<([a-zA-Z0-9_.]+) object at 0x[0-9a-fA-F]+>")
+
+
+def _canonicalize_psort_csv(csv_bytes: bytes) -> bytes:
+    """Scrub psort.py's non-deterministic Python object-address tokens.
+
+    Same function called from mint and reverify so the BLAKE3 inputs are
+    byte-identical canonical-form bytes. If psort upstream eliminates the
+    repr() leak in a future version, this becomes a no-op (the regex won't
+    match anything) and the contract still holds.
+    """
+    return _PSORT_OBJECT_ADDR_RE.sub(rb"<\1 object at 0xMEMADDR>", csv_bytes)
 
 
 def _to_int_or_none(s: str | None) -> int | None:
@@ -299,11 +328,14 @@ def plaso_supertimeline(
         # 30 minutes for a query. The agent's per-question budget is
         # bounded separately at the harness level.
         executor.run(argv, timeout=1800)
-        stdout_bytes = out_csv.read_bytes() if out_csv.exists() else b""
+        raw_csv = out_csv.read_bytes() if out_csv.exists() else b""
     finally:
         if out_csv.exists():
             out_csv.unlink()
 
+    # Strip psort's non-deterministic Python object-address tokens so back-
+    # to-back identical runs produce byte-identical bytes for BLAKE3.
+    stdout_bytes = _canonicalize_psort_csv(raw_csv)
     events = _parse_l2tcsv(stdout_bytes)
 
     # Apply filters post-query — psort filter coverage varies by version,
@@ -372,17 +404,41 @@ def reverify(
     # try to reconstruct the full argv from args_canonical; the canonical
     # query for verification is the un-sliced full-store dump compared via
     # stdout BLAKE3. (Drift either way → fail.)
+    #
+    # Output path: write ALONGSIDE the .plaso store, NOT in a host /tmp
+    # TemporaryDirectory. The macOS Docker shim cannot write to host /tmp
+    # because of the /tmp → /private/tmp symlink + container-UID mismatch.
+    # Mint side already uses this pattern (see parse_supertimeline above);
+    # reverify must mirror it or the replay contract fails on the very
+    # workspace that minted the envelope.
+    import os
     import tempfile
 
     abs_plaso = Path(plaso_path).expanduser().resolve()
-    with tempfile.TemporaryDirectory(prefix="oath-psort-rv-") as tmpdir:
-        out_csv = Path(tmpdir) / "timeline.csv"
+    out_dir = abs_plaso.parent
+    fd, out_csv_str = tempfile.mkstemp(
+        prefix="oath-psort-rv-", suffix=".csv", dir=str(out_dir)
+    )
+    os.close(fd)
+    # psort.py expects to CREATE the file; delete the empty placeholder.
+    Path(out_csv_str).unlink()
+    out_csv = Path(out_csv_str)
+    try:
         argv = ["psort.py", "-o", "l2tcsv", "-w", str(out_csv), str(abs_plaso)]
         try:
-            executor.run(argv)
+            # Match the mint-side budget (1800 s) — psort.py on the DLC
+            # 766 MB store via the Docker amd64 shim runs ~15 min under
+            # Rosetta. The default 300 s would always timeout for full
+            # super-timelines.
+            executor.run(argv, timeout=1800)
         except Exception as e:
             return False, f"psort.py re-run failed: {e}"
-        stdout_bytes = out_csv.read_bytes() if out_csv.exists() else b""
+        raw_csv = out_csv.read_bytes() if out_csv.exists() else b""
+    finally:
+        out_csv.unlink(missing_ok=True)
+    # Mirror the mint-side scrub so identical event content produces
+    # byte-identical bytes for BLAKE3 comparison.
+    stdout_bytes = _canonicalize_psort_csv(raw_csv)
 
     actual = blake3.blake3(stdout_bytes).hexdigest()
     expected = envelope.header.stdout_blake3

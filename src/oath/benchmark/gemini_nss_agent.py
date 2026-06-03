@@ -212,14 +212,17 @@ def build_gemini_nss_agent_fn(
         prompt_hash = hash_prompt(SYSTEM_PROMPT, user_msg)
 
         t0 = time.perf_counter()
-        try:
-            text, telemetry = interactor(config, SYSTEM_PROMPT, user_msg)
-        except Exception as e:
-            print(f"  [{question.question_id}] vertex error: {e}", flush=True)
-            # Even on API failure we still know the model + prompt we attempted
-            return deterministic_executor(
-                question, k, None, model_id=config.model, prompt_hash=prompt_hash
-            )
+        # NO try/except around the interactor call. The interactor's own
+        # retry-with-exponential-backoff handles ALL transient Vertex errors
+        # forever (429 quota, timeouts, 503s, connection resets). Anything
+        # that escapes that loop is a genuine model-side failure (bad auth,
+        # malformed request, permanent quota exhaustion) — silently falling
+        # back to the deterministic resolver on those would corrupt the
+        # benchmark score by mixing LLM-driven and deterministic attempts
+        # without flagging the difference. Let the exception propagate; the
+        # harness's resumable-attempts JSONL means a re-run picks up exactly
+        # where the run aborted, after the operator fixes the root cause.
+        text, telemetry = interactor(config, SYSTEM_PROMPT, user_msg)
         wall = time.perf_counter() - t0
 
         llm_args = parse_llm_args(text)
