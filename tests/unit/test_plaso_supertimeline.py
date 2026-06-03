@@ -15,6 +15,7 @@ from oath.mcp.tools.plaso_supertimeline import (
     SOURCE_FILE,
     SOURCE_REG,
     TimelineEvent,
+    _canonicalize_psort_csv,
     correlate_around,
     events_in_window,
     hash_plaso_store,
@@ -230,6 +231,41 @@ def test_reverify_passes_when_unchanged(ctx, handle, plaso_store):
     )
     ok, _ = reverify(env, plaso_path=plaso_store, executor=FakeExecutor(payload=SAMPLE_CSV))
     assert ok is True
+
+
+def test_canonicalize_psort_csv_scrubs_python_object_addresses():
+    """psort.py leaks Python object memory addresses via repr() into the
+    l2tcsv output. Regression test for a real bug where back-to-back
+    identical psort runs against the DLC 766 MB store differ in ~30 rows —
+    every difference is a `<...module.Class object at 0xHEX>` token with
+    a different hex address. The canonicalization replaces the address
+    with a fixed sentinel so the two outputs produce byte-identical bytes.
+    """
+    a = (
+        b'03/22/2015,15:55:50,UTC,M...,REG,BagMRU,-,-,'
+        b'_event_data_stream_identifier: <acstore.containers.interface.AttributeContainerIdentifier object at 0x400f99ec30>'
+        b' _event_values_hash: ABC,'
+        b'last_written_time: <dfdatetime.filetime.Filetime object at 0x400f8574a0>,-\n'
+    )
+    b = (
+        b'03/22/2015,15:55:50,UTC,M...,REG,BagMRU,-,-,'
+        b'_event_data_stream_identifier: <acstore.containers.interface.AttributeContainerIdentifier object at 0x400d8ca3f0>'
+        b' _event_values_hash: ABC,'
+        b'last_written_time: <dfdatetime.filetime.Filetime object at 0x40104a7020>,-\n'
+    )
+    assert a != b  # the raw bytes differ
+    assert _canonicalize_psort_csv(a) == _canonicalize_psort_csv(b), (
+        "Spoliation hole: psort memory-address scrub failed; "
+        "two byte-identical event streams hash differently."
+    )
+    # The forensic content is preserved (only the memory address sentinel changed).
+    canon = _canonicalize_psort_csv(a)
+    assert b"BagMRU" in canon
+    assert b"_event_values_hash: ABC" in canon
+    assert b"0xMEMADDR" in canon
+    # Concrete addresses are no longer present.
+    assert b"0x400f99ec30" not in canon
+    assert b"0x400d8ca3f0" not in canon
 
 
 def test_reverify_fails_on_stdout_drift(ctx, handle, plaso_store):

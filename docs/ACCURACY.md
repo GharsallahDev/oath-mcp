@@ -60,9 +60,9 @@ DFIR-Metric Module III scores two answer shapes together:
 
 | Answer type | Count | Deterministic | Gemini 3 Flash (headline) | Gemini 3.1 Pro | Gemini 2.5 Flash (superseded) |
 |---|---|---|---|---|---|
-| `nss_inode_filename_list` (list of `<inode>:<filename>` matches) | 486 | 382 / 486 (**78.60%**) | **455 / 486 (93.62%)** | 434 / 486 (89.30%) | 438 / 486 (90.12%) |
-| `numeric` (count of files matching an extension) | 24 | 18 / 24 (**75.00%**) | **18 / 24 (75.00%)** | 18 / 24 (75.00%) | 18 / 24 (75.00%) |
-| **Total** | 510 | **400 / 510 (78.43%)** | **473 / 510 (92.75%)** | 452 / 510 (88.63%) | 456 / 510 (89.41%) |
+| `nss_inode_filename_list` (list of `<inode>:<filename>` matches) | 486 | 382 / 486 (**78.60%**) | **455 / 486 (93.62%)** | 434 / 486 (89.30%) | 438 / 486 (90.12% — superseded) |
+| `numeric` (count of files matching an extension) | 24 | 18 / 24 (**75.00%**) | **18 / 24 (75.00%)** | 18 / 24 (75.00%) | 18 / 24 (75.00% — superseded) |
+| **Total** | 510 | **400 / 510 (78.43%)** | **473 / 510 (92.75%)** | 452 / 510 (88.63%) | 456 / 510 (89.41% — superseded) |
 
 Set-equality scoring: a list-answer is matched iff some candidate (truncated to K=4) is set-equal to the expected list. Order-independent; missing-or-extra items fail. The corpus and scorer are identical to the paper's.
 

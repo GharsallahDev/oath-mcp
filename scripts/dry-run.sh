@@ -154,27 +154,61 @@ check "install-tools syntax OK"           "bash -n scripts/install-tools.sh"
 
 section "11. Sample envelope re-verification (the contract)"
 
-# Pull the FIRST sample-run envelope_id from the index and re-verify it.
+# Verify EVERY envelope in the sample-run signs cleanly under the run's
+# public key + has the data_blake3 integrity field present. This catches
+# schema drift bugs that would otherwise hide behind a single-envelope
+# spot check.
 SAMPLE_INDEX="logs/sample-run/dlc-sample-run.index"
 if [ -s "$SAMPLE_INDEX" ]; then
-  FIRST_EID=$(head -1 "$SAMPLE_INDEX" | awk '{print $1}')
-  check "first sample envelope present in store" \
-    "[ -n \"$FIRST_EID\" ]"
-  # We don't run `oath verify` here because it needs the original evidence
-  # files unpacked at the same /tmp paths. Instead we structurally validate:
-  check "first envelope has valid signature when re-parsed" \
+  N_ENVS=$(wc -l < "$SAMPLE_INDEX" | tr -d ' ')
+  check "sample-run has expected envelopes ($N_ENVS)" \
+    "[ \"$N_ENVS\" -ge 6 ]"
+  check "ALL sample envelopes verify signature + data_blake3" \
     "PYTHONPATH=src python -c \"
 import json, sys
 from pathlib import Path
-from oath.receipt.notarized import Notarized, verify_signature, SigningContext
+from oath.receipt.notarized import Notarized, verify_signature, verify_data_integrity, SigningContext
 ctx = SigningContext.load_or_mint(Path('keys'), run_id='dlc-sample-run')
-raw = json.loads(Path('logs/sample-run/dlc-sample-run.jsonl').read_text().splitlines()[0])
-env = Notarized.model_validate(raw)
-ok = verify_signature(env, ctx.public_key)
-sys.exit(0 if ok else 1)
+failed = []
+for i, line in enumerate(Path('logs/sample-run/dlc-sample-run.jsonl').read_text().splitlines()):
+    if not line.strip(): continue
+    env = Notarized.model_validate_json(line)
+    if not verify_signature(env, ctx.public_key):
+        failed.append((i, env.header.tool_name, 'signature'))
+    elif not verify_data_integrity(env):
+        failed.append((i, env.header.tool_name, 'data_blake3'))
+if failed:
+    print(failed)
+sys.exit(0 if not failed else 1)
 \""
 else
   check_skip "sample envelope re-verification" "no sample-run index file"
+fi
+
+section "12. End-to-end replay (production verifier path)"
+
+# Run `oath verify` against EVERY sample-run envelope. This is the actual
+# contract a hackathon judge would exercise; catches reverify-path bugs
+# that signature+data_blake3 checks alone miss (e.g. tool subprocess output
+# paths the host filesystem can't write to).
+if [ -s "$SAMPLE_INDEX" ]; then
+  check "every sample envelope passes oath verify" \
+    "PYTHONPATH=src python -c \"
+import sys, subprocess
+from pathlib import Path
+eids = []
+for line in Path('$SAMPLE_INDEX').read_text().splitlines():
+    parts = line.strip().split()
+    if parts: eids.append(parts[0])
+failed = []
+for eid in eids:
+    r = subprocess.run(['oath','verify',eid], capture_output=True, text=True, timeout=1800)
+    if r.returncode != 0 or 'PASS' not in (r.stdout + r.stderr):
+        failed.append((eid[:16], (r.stdout + r.stderr).strip().splitlines()[-1] if (r.stdout or r.stderr) else 'no output'))
+if failed:
+    for e in failed: print('FAIL', e)
+sys.exit(0 if not failed else 1)
+\""
 fi
 
 section "Summary"
