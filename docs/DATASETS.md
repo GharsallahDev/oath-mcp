@@ -1,6 +1,6 @@
 # Datasets
 
-This document inventories every dataset OATH was tested against, with source URLs, file hashes, sizes, and the reproduction steps a judge or examiner needs to use them. Reproducibility starts here.
+This document inventories every dataset OATH was tested against, with source URLs, file hashes, sizes, and the reproduction steps a reviewer or examiner needs to use them. Reproducibility starts here.
 
 All datasets are publicly downloadable and free of cost. None are bundled into this repository — they live under `corpus/` (gitignored) so the repo stays small.
 
@@ -160,7 +160,7 @@ oath mount corpus/nss-string-search/*/copy-to-test-computer/ss-unix-07-25-18.dd
 python scripts/nss_baseline.py
 # Expected: TUS@4 = 0.7843 (382/486 list + 18/24 numeric = 400/510 matched)
 
-# Live agent — requires gcloud auth + a Vertex AI-enabled GCP project
+# Live agent — requires configured hosted-model credentials
 python scripts/nss_baseline.py --live-vertex
 # Expected: TUS@4 = 0.9275 (455/486 list + 18/24 numeric = 473/510 matched, gemini-3-flash-preview)
 ```

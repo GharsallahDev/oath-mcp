@@ -9,18 +9,18 @@ OATH targets **DFIR-Metric Module III (NIST String Search)** from [arXiv:2505.19
 | System | TUS@4 (full corpus, 510 questions) |
 |---|---|
 | GPT-4.1 (paper baseline, arXiv:2505.19973 Table 4) | **38.5%** |
-| **OATH live agent (Vertex Gemini 3 Flash + verifier)** | **92.75%** |
-| OATH live agent (Vertex Gemini 3.1 Pro + verifier) | 88.63% |
-| OATH live agent (Vertex Gemini 2.5 Flash + verifier — superseded) | 89.41% |
+| **OATH live agent (Gemini 3 Flash + verifier)** | **92.75%** |
+| OATH live agent (Gemini 3.1 Pro + verifier) | 88.63% |
+| OATH live agent (Gemini 2.5 Flash + verifier — superseded) | 89.41% |
 | OATH deterministic baseline (no LLM at all) | **78.43%** |
 
 Same corpus. Same image. Same scoring rule. Same K=4 candidate budget. **OATH's live agent matches +54.25 absolute points over the published frontier-LLM baseline; the deterministic-baseline-without-an-LLM still beats it by +39.9 points.**
 
-Every question above received a real LLM answer — no transient API errors were silently swallowed as deterministic fallbacks (which would have invalidated the score). The agent retries indefinitely with exponential backoff on transient Vertex errors (429 quota, timeout, 503, connection reset) so the headline reflects the model's actual capability, not the API's flakiness.
+Every question above received a real LLM answer — no transient API errors were silently swallowed as deterministic fallbacks (which would have invalidated the score). The agent retries indefinitely with exponential backoff on transient provider errors (429 quota, timeout, 503, connection reset) so the headline reflects the model's actual capability, not the API's flakiness.
 
 The deterministic-baseline number is the more interesting one. **It demonstrates that the architectural lift — constraining the LLM to a typed-args proposal that a verifier-gated executor runs deterministically — is itself worth ~40 points** before the LLM ever proposes anything.
 
-**Model-tier observation.** Gemini 3.1 Pro (the heavier-reasoning tier) scored *below* Gemini 3 Flash on this corpus. The NSS task is mechanical (pick the right partition + right pattern + right filter); Pro's extra ~250k thinking tokens didn't help, and one Vertex 60s timeout cost it one question's worth. This is consistent with the architectural argument — once the search space is closed via typed-args proposal, the LLM's incremental contribution flattens out; what matters is whether the LLM picks the right closed-form args, not how much it reasons about open-ended Python script generation.
+**Model-tier observation.** Gemini 3.1 Pro (the heavier-reasoning tier) scored *below* Gemini 3 Flash on this corpus. The NSS task is mechanical (pick the right partition + right pattern + right filter); Pro's extra ~250k thinking tokens didn't help, and one hosted-model timeout cost it one question's worth. This is consistent with the architectural argument — once the search space is closed via typed-args proposal, the LLM's incremental contribution flattens out; what matters is whether the LLM picks the right closed-form args, not how much it reasons about open-ended Python script generation.
 
 ## §2. Reproducibility
 
@@ -47,7 +47,7 @@ curl -sSL -o corpus/DFIR-Metric-NSS.json \
 # Reproduce the deterministic baseline (no LLM)
 python scripts/nss_baseline.py
 
-# Reproduce the live-agent number (requires `gcloud auth application-default login`)
+# Reproduce the live-agent number (requires configured hosted-model credentials)
 python scripts/nss_baseline.py --live-vertex                               # default: gemini-3.1-pro-preview
 python scripts/nss_baseline.py --live-vertex --vertex-model gemini-3-flash-preview   # headline model
 ```
@@ -74,9 +74,9 @@ The honest comparison on the **harder** subset — questions where the system mu
 
 | System | Non-empty-expected subset (227 questions where the search must find something) |
 |---|---|
-| **OATH live agent (Vertex Gemini 3 Flash + verifier)** | **83.70%** (190 / 227) |
-| OATH live agent (Vertex Gemini 3.1 Pro + verifier) | 74.45% (169 / 227) |
-| OATH live agent (Vertex Gemini 2.5 Flash + verifier — superseded) | 76.21% (173 / 227) |
+| **OATH live agent (Gemini 3 Flash + verifier)** | **83.70%** (190 / 227) |
+| OATH live agent (Gemini 3.1 Pro + verifier) | 74.45% (169 / 227) |
+| OATH live agent (Gemini 2.5 Flash + verifier — superseded) | 76.21% (173 / 227) |
 | OATH deterministic baseline (no LLM) | **51.54%** (117 / 227) |
 | GPT-4.1 (paper) | not reported in arXiv:2505.19973 |
 
@@ -110,7 +110,7 @@ OATH was designed to keep the original-image bytes unmodified. Three layers enfo
 - The MCP server (`src/oath/mcp/server.py`) exposes only typed functions. There is no `execute_shell` tool. The agent cannot run `dd`, `wipefs`, or `mkfs` because those tools aren't in the MCP surface.
 - The Witness Oath Verifier signs over the **image SHA-256** at envelope-mint time. Mutating the image post-mint breaks every envelope's reverify chain.
 
-**Spoliation tests** (11 named, executed, repeatable — see `tests/integration/test_spoliation.py`):
+**Spoliation tests** (14 named, executed, repeatable — see `tests/integration/test_spoliation.py`):
 
 > Hypothesis 1: if a single byte of the source image is modified after envelope creation, the Witness Oath Verifier must catch it.
 >
@@ -122,7 +122,7 @@ OATH was designed to keep the original-image bytes unmodified. Three layers enfo
 
 ## §7. Token economics
 
-The live agent's per-question token usage was captured from `usage_metadata` on every Vertex `generate_content` response and persisted into the `BenchmarkResult` JSON (`model_id`, `prompt_token_count`, `candidates_token_count`, `total_token_count` on each `QuestionAttempt`).
+The live agent's per-question token usage was captured from provider `usage_metadata` on every model response and persisted into the `BenchmarkResult` JSON (`model_id`, `prompt_token_count`, `candidates_token_count`, `total_token_count` on each `QuestionAttempt`).
 
 | Metric | Gemini 3 Flash (headline) | Gemini 3.1 Pro | Gemini 2.5 Flash (superseded) |
 |---|---|---|---|
@@ -134,7 +134,7 @@ The live agent's per-question token usage was captured from `usage_metadata` on 
 | Wall-clock per question | mean **~13 s** | mean ~8 s | mean ~4 s |
 | Wall-clock total run | **~111 min** | ~71 min | ~32 min |
 
-The per-question reasoning trace is bounded because the LLM emits a JSON args proposal, not a Python script — the system prompt is a fixed ~1.2 k tokens regardless of question. Tokens scale linearly with corpus size, not with image complexity. (A future cross-model comparison swapping Vertex Gemini for Anthropic Claude or OpenAI GPT is a drop-in test — the harness, the verifier, and the scoring are model-agnostic.)
+The per-question reasoning trace is bounded because the LLM emits a JSON args proposal, not a Python script — the system prompt is a fixed ~1.2 k tokens regardless of question. Tokens scale linearly with corpus size, not with image complexity. A future cross-model comparison is a drop-in test: the harness, the verifier, and the scoring are model-agnostic.
 
 Per-question token records live in `logs/benchmarks/nss-vertex_attempts.jsonl` and aggregate into `logs/benchmarks/nss-vertex_III_tus4.json` alongside the candidates and verdicts — every entry is reproducible end-to-end.
 

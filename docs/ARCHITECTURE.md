@@ -1,6 +1,6 @@
 # OATH — Architecture
 
-> **Architectural pattern (per SANS Find Evil! taxonomy):** **#2 — Custom MCP Server.** Typed, schema-constrained forensic functions exposed via stdio MCP; no `execute_shell` surface; chain-of-custody enforced architecturally, not by prompt-engineering.
+> **Architectural pattern:** typed, schema-constrained forensic functions exposed through a custom MCP-style tool surface; no `execute_shell` surface; chain-of-custody enforced architecturally, not by prompt-engineering.
 
 ## One-paragraph summary
 
@@ -31,7 +31,7 @@ flowchart TB
         E1["• data · tool_name · tool_version (pinned)<br/>• args_canonical (RFC 8785 JCS)<br/>• image_sha256 · stdout_blake3<br/>• evidence_offsets · ed25519_sig · prev (hash chain link)"]
     end
 
-    subgraph AGENT["🤖 Vertex Gemini 3 Flash — args-proposal architecture"]
+    subgraph AGENT["🤖 LLM args-proposal layer"]
         PROPOSE[LLM emits JSON args spec<br/><i>NOT executable code</i>]
         EXEC[Deterministic executor runs typed call]
         PROPOSE --> EXEC
@@ -113,11 +113,11 @@ Total wall-clock: typically under 5 seconds per receipt on commodity hardware. P
 
 ### 4. Public, reproducible benchmark
 
-OATH is scored on the [DFIR-Metric](https://arxiv.org/abs/2505.19973) Module III (NIST String Search) corpus — the same 510-question file the paper authors published. Frontier-LLM baseline (GPT-4.1) = **38.5% TUS@4**. OATH live (Vertex Gemini 3 Flash + verifier) = **92.75% TUS@4**. Same corpus, same image, same scoring rule, same K=4 candidate budget. Methodology + per-question audit + reproduction one-liner: [`docs/ACCURACY.md`](ACCURACY.md).
+OATH is scored on the [DFIR-Metric](https://arxiv.org/abs/2505.19973) Module III (NIST String Search) corpus — the same 510-question file the paper authors published. Frontier-LLM baseline (GPT-4.1) = **38.5% TUS@4**. OATH live agent + verifier = **92.75% TUS@4**. Same corpus, same image, same scoring rule, same K=4 candidate budget. Methodology + per-question audit + reproduction one-liner: [`docs/ACCURACY.md`](ACCURACY.md).
 
 ## Security boundaries — where they're enforced
 
-Per Find Evil! judging criterion #4 (Constraint Implementation), this table makes explicit which guardrails are **architectural** (enforced by the type system / no-tool-available) vs **prompt-based** (enforced by asking the LLM nicely).
+This table makes explicit which guardrails are **architectural** (enforced by the type system / no-tool-available) vs **prompt-based** (enforced by asking the LLM nicely).
 
 | Guardrail | Enforcement | What stops a malicious / hallucinating LLM |
 |---|---|---|
@@ -129,7 +129,7 @@ Per Find Evil! judging criterion #4 (Constraint Implementation), this table make
 | Chain of custody is tamper-evident | **Architectural** | Every envelope's `prev` field is the BLAKE3 of the previous envelope's header. Mutating any envelope breaks the chain at the next link. The chain is verifiable from the JSONL store with no LLM in the loop. |
 | Tool versions are pinned | **Architectural** | Each typed function module hardcodes the expected version (`EVTXECMD_VERSION = "2026.5.0"`, etc.). Envelopes mint with the actual version reported by the tool; reverify across a version bump is a recognizable failure mode (the verifier surfaces "version drift" as the reason). |
 | Plugin / rule corpus is pinned | **Architectural** | `parse_registry` records the SHA-256 of the RECmd plugin pack at mint time. `run_hayabusa` records the SHA-256 of the Sigma rule corpus. Updates to either are caught by `reverify` and surfaced as "rule corpus drift". |
-| LLM stays inside the typed-args schema | **Prompt-based** ⚠️ | The Vertex Gemini system prompt instructs the LLM to emit a JSON object matching the schema. If the LLM ignores this, our parser (`parse_llm_args` in `gemini_nss_agent.py`) returns `None` and the deterministic executor falls back to heuristic resolution — **no malicious LLM output reaches the forensic tools.** This is the only prompt-based layer in the system, and it fails *closed* (skipped, not bypassed). |
+| LLM stays inside the typed-args schema | **Prompt-based** ⚠️ | The model-facing prompt instructs the LLM to emit a JSON object matching the schema. If the LLM ignores this, the parser returns `None` and no untrusted free-form command reaches the forensic tools. This is the prompt-based layer in the system, and it fails *closed* (skipped, not bypassed). |
 | Spoliation (image-byte mutation between mint and reverify) | **Architectural** | Mutating the image bytes after envelope mint causes the underlying tool to produce different output bytes, which fails the BLAKE3 chain. Covered by `tests/integration/test_spoliation.py`. |
 | Persisted `envelope.data` tampering (fabricated record planted in the JSONL store) | **Architectural** | `NotarizedHeader` carries `data_blake3 = BLAKE3(canonicalize(data))`; because the header is signed, the data field is transitively cryptographically committed. The verifier recomputes `data_blake3` from the current persisted data and rejects on mismatch (RALPH_WIGGUM, drift detected). Without this, an attacker who can write the JSONL store could mutate `envelope.data` while leaving raw stdout untouched, surviving the BLAKE3-of-stdout reverify. |
 | Daubert binding — "which model produced this finding, from what prompt?" | **Architectural** | `NotarizedHeader` carries `model_id` (e.g. `gemini-3.1-pro-preview`) and `prompt_hash = BLAKE3(len-prefixed(system_prompt \|\| user_message))`. Both are signed by the header signature. The receipt itself answers the Daubert question without trusting the agent's logs. Tampering with either field invalidates the signature. None-valued for deterministic envelopes (no LLM in the loop), and the null is itself signed — preventing post-hoc field-stripping attacks. |

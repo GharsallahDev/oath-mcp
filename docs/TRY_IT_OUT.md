@@ -10,10 +10,10 @@ Three things, all standard on a developer Mac:
 - **Python 3.11+** — included with macOS 14+, or `brew install python@3.14`
 - **Xcode Command Line Tools** — installed by `xcode-select --install` if you don't have them
 
-For the Vertex live-agent mode (optional), you'll additionally need:
+For the hosted live-agent mode (optional), you'll additionally need:
 
 - **gcloud CLI** with an authenticated project (`gcloud auth application-default login`)
-- The Vertex AI API enabled on the project (`gcloud services enable aiplatform.googleapis.com`)
+- The required hosted-model API enabled for the authenticated project
 
 ## 2. One-shot install
 
@@ -87,7 +87,7 @@ curl -sSL -o corpus/DFIR-Metric-NSS.json \
 # Run the deterministic baseline (no API; ~3-5 min on M5 Pro)
 python scripts/nss_baseline.py
 
-# OR run the live Vertex Gemini agent (requires gcloud auth)
+# OR run the live Gemini agent (requires hosted-model credentials)
 python scripts/nss_baseline.py --live-vertex
 ```
 
@@ -131,7 +131,7 @@ After the script runs, `rm -rf <oath-checkout>` is the final manual step.
 
 ## Troubleshooting
 
-- **`Vertex AI API has not been used in project ...`** — `gcloud services enable aiplatform.googleapis.com --project=<your-project>`
+- **Hosted-model API disabled for the project** — enable the provider API for the authenticated project
 - **`The credentials need to be configured`** — `gcloud auth application-default login`
 - **`Cannot connect to the Docker daemon`** — `colima start --arch aarch64 --cpu 4 --memory 8 --disk 30`
 - **EZ Tool says "You must install or update .NET"** — make sure you sourced `.oath-tools/env.sh`; it sets `DOTNET_ROLL_FORWARD=Major` so .NET 10 hosts the .NET 9 EZ Tools.
