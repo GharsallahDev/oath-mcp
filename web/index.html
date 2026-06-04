@@ -33,7 +33,7 @@
   <!-- HERO ============================================================ -->
   <section class="hero">
     <div class="hero-content">
-      <p class="hero-tag">SANS Find Evil! · Custom MCP Server pattern</p>
+      <p class="hero-tag">Verifier-gated evidence receipts</p>
       <h1 class="hero-title">
         Every forensic claim<br/>
         is a <span class="hero-emphasis">signed receipt</span>.
@@ -53,7 +53,7 @@
           <div class="metric-label">GPT-4.1 baseline<br/><span class="muted">arXiv:2505.19973</span></div>
         </div>
         <div class="metric metric-emphasis">
-          <div class="metric-value">89.22%</div>
+          <div class="metric-value">92.75%</div>
           <div class="metric-label">OATH live (Gemini)<br/><span class="muted">verifier-gated</span></div>
         </div>
         <div class="metric">
@@ -150,10 +150,9 @@
     <pre class="codeblock"><code># From a fresh git clone:
 git clone https://github.com/GharsallahDev/oath && cd oath
 
-# Install (macOS or SIFT — both tested):
+# Install the local forensic toolchain:
 bash scripts/install-tools.sh        # macOS Apple Silicon
-# OR
-bash scripts/install-on-sift.sh      # SIFT Workstation / Ubuntu
+bash scripts/install-on-sift.sh      # Linux forensic workstation
 
 source .oath-tools/env.sh
 
@@ -171,8 +170,7 @@ oath verify &lt;envelope-id&gt;</code></pre>
     OATH · MIT licensed · <a href="https://github.com/GharsallahDev/oath" target="_blank" rel="noopener">github.com/GharsallahDev/oath</a>
   </p>
   <p class="muted">
-    Built for the SANS <a href="https://findevil.devpost.com" target="_blank" rel="noopener">Find Evil!</a> hackathon ·
-    Pattern #2 (Custom MCP Server) · Submission · 2026-06
+    Notarized evidence envelopes for LLM-assisted forensic claims.
   </p>
 </footer>
 

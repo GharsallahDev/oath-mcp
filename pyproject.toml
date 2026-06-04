@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "oath"
 version = "0.1.0"
-description = "Autonomous DFIR agent — every forensic claim takes the oath."
+description = "Signed evidence receipts and verifier-gated claims for LLM-assisted digital forensics."
 readme = "README.md"
 license = { text = "MIT" }
 authors = [{ name = "GharsallahDev" }]

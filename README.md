@@ -1,109 +1,147 @@
 # OATH
 
-**Autonomous DFIR agent. Every forensic claim takes the oath: deterministic re-derivation from the original-image SHA-256, or it doesn't ship.**
+Verifier-gated evidence receipts for LLM-assisted digital forensics.
 
-OATH is an autonomous incident-response agent built on the SANS Find Evil! pattern #2 — a **Custom MCP Server** with 11 typed forensic functions and architectural (not prompt-based) chain-of-custody enforcement. Every finding is wrapped in a signed `Notarized<T>` envelope. Hallucinations don't get suppressed — they get **quarantined and shown to the examiner**.
+OATH is a research prototype for making forensic claims replayable. It separates
+what an LLM proposes from what the evidence proves: forensic tools produce signed
+`Notarized<T>` envelopes, and the Witness Oath Verifier promotes only claims that
+can be deterministically re-derived from the original evidence bytes.
 
-## The numbers
+This repository supports the paper:
 
-| System | DFIR-Metric Module III TUS@4 (510 questions) |
-|---|---|
-| GPT-4.1 (paper baseline, [arXiv:2505.19973](https://arxiv.org/abs/2505.19973)) | **38.5%** |
-| **OATH live agent (Vertex Gemini 3 Flash + verifier)** | **92.75%** |
-| OATH deterministic baseline (no LLM at all) | **78.43%** |
+> **OATH: Notarized Evidence Envelopes for LLM-Assisted Forensic Claims**
 
-Same corpus. Same image. Same scoring rule. Same K=4 candidate budget. **The deterministic-baseline number is the more interesting one** — it shows the architectural lift alone is worth ~40 points before any LLM proposes anything. Full methodology, per-question audit, and a reproduction one-liner: [`docs/ACCURACY.md`](docs/ACCURACY.md).
+## Core Idea
 
-## Why it exists
+LLM-assisted investigation fails dangerously when a fluent model summary is
+treated as evidence. OATH treats that as a systems problem. A finding is not
+accepted because the model said it; it is accepted only when it cites a signed
+receipt whose contents replay.
 
-Existing autonomous-DFIR agents treat hallucination as a behavioral problem and patch it with prompt-engineering. Fabricated forensic evidence is a different class of failure: in court it's career-ending; in production it's how the wrong person gets handed to legal. OATH treats hallucination as an **architectural** problem and solves it by construction:
+Each `Notarized<T>` envelope binds:
 
-1. **The Witness Oath Verifier** — every LLM claim must pass deterministic re-derivation from the original-image SHA-256. Claims that fail are **QUARANTINED** — surfaced to the examiner as "the agent suspected this but couldn't prove it," never promoted to findings.
+- original evidence hash
+- typed tool name and version
+- canonical tool arguments
+- raw tool-output hash
+- parsed-data hash
+- supporting byte offsets when available
+- model identifier and prompt hash when an LLM contributed
+- previous-envelope hash for tamper-evident sequencing
+- Ed25519 signature over the signed header
 
-2. **The Ralph Wiggum Loop** — when a hypothesis fails the verifier, the agent visibly abandons it on-screen and narrates revision under a derived constraint. Self-correction is architecturally enforced, not aspirational. Real, persisted artifact in [`logs/self-correction-demo/manifest.md`](logs/self-correction-demo/manifest.md) — re-run in 2 s via `python scripts/show_self_correction.py`.
+The verifier then classifies claims as:
 
-3. **The Replay Receipt** — `oath verify <envelope-id>` re-derives any finding from the original image on an examiner's laptop in well under a minute. No LLM, no API key, no MCP server boot. *What cannot replay does not exist.*
+- `VERIFIED`: the receipt and predicate replay successfully
+- `QUARANTINED`: the receipt is intact, but the cited claim is not supported
+- `RALPH_WIGGUM`: evidence drift or receipt tampering is detected, forcing visible
+  abandonment and re-proposal
 
-4. **A public, reproducible benchmark** — scored against the only published LLM-DFIR benchmark in the space ([DFIR-Metric](https://arxiv.org/abs/2505.19973) Module III). Same corpus, same image, same scoring rule as the published baseline.
+## Results
 
-## Architecture (SANS Find Evil! pattern #2 — Custom MCP Server)
+The benchmark is DFIR-Metric Module III, using 510 scored string-search
+questions in the local harness and a four-candidate answer budget.
 
-```mermaid
-flowchart LR
-    IMG[Forensic image .E01] --> MOUNT[oath mount]
-    MOUNT --> MCP{11 typed functions<br/>parse_evtx · parse_mft<br/>parse_registry · parse_usnjrnl<br/>parse_amcache · parse_prefetch<br/>find_strings · run_hayabusa<br/>vol3_query · plaso_supertimeline<br/>enumerate_credential_artifacts}
-    MCP -->|signed Notarized envelope| AGENT[Vertex Gemini 3 Flash<br/>args-proposal architecture]
-    AGENT -->|cite envelope_id| VERIFIER{Witness Oath<br/>Verifier}
-    VERIFIER -->|BLAKE3 match + predicate match| SHIP[VERIFIED → ship]
-    VERIFIER -->|predicate miss| QUAR[QUARANTINED<br/>surfaced to examiner]
-    VERIFIER -->|envelope drift| RALPH[RALPH WIGGUM<br/>visible re-propose]
-    RALPH --> AGENT
-    SHIP --> RECEIPT[oath verify &lt;id&gt;<br/>&lt;60s, no LLM]
-```
+| System | TUS@4 |
+|---|---:|
+| GPT-4.1 published baseline | 38.5% |
+| OATH deterministic baseline, no LLM | 78.43% |
+| OATH live agent with verifier | 92.75% |
 
-Full diagram + the Security Boundaries table (architectural vs prompt-based, per Find Evil! judging criterion #4): [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+The architectural result matters more than the model headline: typed tool
+invocation plus deterministic replay removes a large class of free-form
+script-generation failures before any model-specific capability is counted.
 
-## Install — two paths, both tested
+Full methodology and audit notes are in [docs/ACCURACY.md](docs/ACCURACY.md).
 
-### macOS (Apple Silicon) — native install
+## Artifact Release
+
+A verifier-focused artifact release is available from:
+
+https://github.com/GharsallahDev/oath/releases
+
+The release is intended to let an independent reviewer answer the narrow
+question: does the receipt, signature, canonicalization, replay, and
+self-correction design work? It does not include private case data, signing
+secrets, API keys, or operational prompts.
+
+## Quick Start
 
 ```bash
-git clone https://github.com/GharsallahDev/oath && cd oath
-bash scripts/install-tools.sh                  # idempotent
+git clone https://github.com/GharsallahDev/oath
+cd oath
+
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
+
+PYTHONPATH=src python -m pytest tests/integration/test_spoliation.py -q
+PYTHONPATH=src python scripts/show_self_correction.py
+```
+
+For a full local run against forensic tools, install the pinned toolchain first:
+
+```bash
+bash scripts/install-tools.sh
 source .oath-tools/env.sh
-```
 
-What it installs: dotnet SDK + EZ Tools 2026.5.0 + Hayabusa 3.9.0 + Sleuthkit + Volatility 3 + plaso (via colima Docker amd64 — the only path that works on arm64). All sandboxed under `.oath-tools/`. Total disk: ~1.5 GB.
-
-### SIFT Workstation (Ubuntu x86_64) — what judges will use
-
-```bash
-git clone https://github.com/GharsallahDev/oath ~/oath
-cd ~/oath
-bash scripts/install-on-sift.sh                # uses SIFT-baked tools where possible
-source .oath-tools/env.sh
-```
-
-What it installs: the same toolchain, but takes advantage of SIFT's pre-installed Sleuthkit + Volatility 3 + plaso (native Linux — no Docker shim needed). Just adds .NET + EZ Tools + Hayabusa. Smoke-tests every tool before reporting success.
-
-Full walkthrough: [`docs/TRY_IT_OUT.md`](docs/TRY_IT_OUT.md). Cleanup is one command: `bash uninstall.sh`.
-
-## Try it in 60 seconds
-
-```bash
-# Mount any forensic image read-only — streams SHA-256, persists EvidenceHandle
-oath mount path/to/Hacking_Case.E01
-
-# Reproduce the DFIR-Metric benchmark (deterministic; no API key)
-python scripts/nss_baseline.py
-
-# OR run the live Gemini agent (requires gcloud auth)
-python scripts/nss_baseline.py --live-vertex
-
-# Re-derive any single finding from the original image
+oath mount path/to/evidence.E01
 oath verify <envelope-id>
 ```
 
-## What's inside
+Linux forensic workstation setup is documented in
+[docs/TRY_IT_OUT.md](docs/TRY_IT_OUT.md).
 
-| Layer | Purpose |
+## Architecture
+
+```mermaid
+flowchart LR
+    IMG["Evidence image"] --> HANDLE["Read-only EvidenceHandle"]
+    HANDLE --> TOOLS["Typed forensic tools"]
+    TOOLS --> ENV["Signed Notarized<T> envelope"]
+    LLM["LLM proposes typed arguments and claims"] --> TOOLS
+    LLM --> CLAIM["Claim cites envelope_id"]
+    CLAIM --> VERIFY{"Witness Oath Verifier"}
+    ENV --> VERIFY
+    VERIFY -->|receipt replays + predicate matches| OK["VERIFIED"]
+    VERIFY -->|receipt intact, predicate missing| Q["QUARANTINED"]
+    VERIFY -->|hash/signature/data drift| R["RALPH_WIGGUM"]
+    R --> LLM
+```
+
+OATH uses a custom MCP-style tool surface with typed functions rather than an
+arbitrary shell. The LLM can propose arguments and hypotheses; it cannot promote
+its own findings. Promotion is reserved for the deterministic verifier.
+
+Detailed trust-boundary notes are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Repository Map
+
+| Path | Purpose |
 |---|---|
-| `src/oath/receipt/` | `Notarized[T]` cryptographic envelope (ed25519 + BLAKE3 + RFC 8785 JCS + hash chain) |
-| `src/oath/mcp/` | Custom MCP server exposing 11 typed forensic functions |
-| `src/oath/mcp/tools/` | Typed wrappers around EZ Tools / Volatility 3 / Hayabusa / plaso / Sleuthkit — each mints a `Notarized` envelope |
-| `src/oath/witness/` | Witness Oath Verifier + Ralph Wiggum self-correction loop |
-| `src/oath/agent/` | Hypothesis-driven orchestration → structured `TriageReport` |
-| `src/oath/benchmark/` | DFIR-Metric harness + Claude/Gemini live-agent bridges + scorer |
-| `src/oath/narrator/` | Rich-based terminal narration of verifier + Ralph Wiggum events |
-| `tests/integration/test_spoliation.py` | 14 named tests proving the verifier catches image tampering / signature tampering / persisted-data tampering (`data_blake3`) / Daubert binding tampering (`model_id` + `prompt_hash` signed into the header) / chain-of-custody breaks |
+| `src/oath/receipt/` | `Notarized<T>` envelope, canonicalization, signatures, prompt hashing |
+| `src/oath/mcp/` | Typed forensic tool surface and evidence-handle plumbing |
+| `src/oath/witness/` | Verifier, claim predicates, self-correction events |
+| `src/oath/benchmark/` | DFIR-Metric harness and scoring utilities |
+| `tests/integration/test_spoliation.py` | Spoliation, data-integrity, chain, and Daubert-binding tests |
+| `logs/self-correction-demo/` | Re-runnable self-correction artifact |
+| `web/` | Static receipt explorer for signed sample envelopes |
+
+## What OATH Does Not Claim
+
+OATH does not prove legal admissibility, certify tool correctness, make wrappers
+honest by magic, prove general DFIR competence, or remove the need for examiner
+review. It provides a concrete receipt and verifier pattern for making
+LLM-assisted forensic claims auditable.
 
 ## Documentation
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — full architecture diagram + Security Boundaries table
-- [`docs/ACCURACY.md`](docs/ACCURACY.md) — DFIR-Metric numbers, methodology, spoliation contract
-- [`docs/DATASETS.md`](docs/DATASETS.md) — every dataset, SHA-256s, license, reproduction
-- [`docs/TRY_IT_OUT.md`](docs/TRY_IT_OUT.md) — unabridged install + run walkthrough
+- [Architecture](docs/ARCHITECTURE.md)
+- [Artifact release notes](docs/ARTIFACT.md)
+- [Accuracy and benchmark notes](docs/ACCURACY.md)
+- [Dataset documentation](docs/DATASETS.md)
+- [Try-it-out instructions](docs/TRY_IT_OUT.md)
 
 ## License
 
-MIT. See [`LICENSE`](LICENSE).
+MIT. See [LICENSE](LICENSE).
