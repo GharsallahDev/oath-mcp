@@ -5,7 +5,7 @@
 # holds end-to-end from this checkout. Run before submission.
 #
 # What it checks:
-#   1. The full test suite passes (297+ tests, including the 14
+#   1. The full test suite passes (298+ tests, including the 14
 #      spoliation contract tests covering data-tampering attacks AND
 #      the Daubert model_id/prompt_hash binding)
 #   2. Every CLI entry point shows the correct help and version
@@ -76,7 +76,7 @@ check "plaso shim psort.py on PATH"       "command -v psort.py"
 
 section "2. Test suite"
 
-check "297+ tests passing" \
+check "298+ tests passing" \
   "PYTHONPATH=src python -m pytest tests/ -q --tb=no 2>&1 | grep -E '[0-9]{3,} passed'"
 
 section "3. CLI surface"
@@ -91,8 +91,8 @@ section "4. Sample-run integrity"
 
 check "sample-run JSONL exists"           "[ -s logs/sample-run/dlc-sample-run.jsonl ]"
 check "sample-run summary exists"         "[ -s logs/sample-run/data-leakage-case.summary.md ]"
-check "sample-run has 5 envelopes" \
-  "[ \"\$(wc -l < logs/sample-run/dlc-sample-run.jsonl)\" -ge 5 ]"
+check "sample-run has 6 envelopes" \
+  "[ \"\$(wc -l < logs/sample-run/dlc-sample-run.jsonl)\" -ge 6 ]"
 
 section "5. Web UI artifacts"
 

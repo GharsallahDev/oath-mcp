@@ -73,3 +73,17 @@ keys/
 .claude/
 log2timeline-*.log.gz
 psort-*.log.gz
+
+# Paper-build artifacts (source + PDF are archived on Zenodo, not in-repo)
+oath.tex
+oath.pdf
+oath.aux
+oath.bbl
+oath.blg
+oath.log
+oath.out
+oath.bib
+oath_*.png
+
+# Local video composition (the recording lives outside the public repo)
+video/
