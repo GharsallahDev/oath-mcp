@@ -29,6 +29,28 @@ log() { printf '[install] %s\n' "$*"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 # ---------------------------------------------------------------------------- #
+# 0. Protocol SIFT baseline                                                    #
+# ---------------------------------------------------------------------------- #
+# OATH extends Protocol SIFT (teamdfir/protocol-sift). Protocol SIFT installs
+# Claude Code + 5 DFIR skill packs + a PDF report generator under ~/.claude.
+# OATH inherits that baseline and layers its typed MCP server +
+# Notarized<T> envelope + Witness Oath Verifier on top. The Find Evil!
+# Get-Started step calls for this install. Skip-flag:
+#   OATH_SKIP_PROTOCOL_SIFT=1 bash scripts/install-tools.sh
+if [[ "${OATH_SKIP_PROTOCOL_SIFT:-0}" != "1" ]]; then
+  if [[ -d "$HOME/.claude/skills/memory-analysis" ]] && \
+     [[ -f "$HOME/.claude/CLAUDE.md" ]]; then
+    log "Protocol SIFT already present at \$HOME/.claude — skipping baseline install."
+  else
+    log "installing Protocol SIFT baseline (teamdfir/protocol-sift)..."
+    curl -fsSL https://raw.githubusercontent.com/teamdfir/protocol-sift/main/install.sh | bash
+    log "Protocol SIFT baseline installed."
+  fi
+else
+  log "OATH_SKIP_PROTOCOL_SIFT=1 set — assuming Protocol SIFT was installed already."
+fi
+
+# ---------------------------------------------------------------------------- #
 # 1. Homebrew + system packages                                                #
 # ---------------------------------------------------------------------------- #
 if ! have brew; then
@@ -121,7 +143,16 @@ if [ -z "${TARGET_DLL:-}" ] || [ ! -f "${TARGET_DLL}" ]; then
 fi
 : "${DOTNET_ROOT:=/opt/homebrew/opt/dotnet/libexec}"; export DOTNET_ROOT
 : "${DOTNET_ROLL_FORWARD:=Major}"; export DOTNET_ROLL_FORWARD
-exec dotnet "${TARGET_DLL}" "$@"
+# Resolve dotnet explicitly so a clean shell (PATH without /opt/homebrew/bin)
+# still finds it — ./verify.sh from a fresh shell must work.
+DOTNET_BIN=""
+if [ -x "$DOTNET_ROOT/dotnet" ]; then DOTNET_BIN="$DOTNET_ROOT/dotnet"
+elif [ -x "/opt/homebrew/bin/dotnet" ]; then DOTNET_BIN="/opt/homebrew/bin/dotnet"
+elif [ -x "/usr/local/bin/dotnet" ]; then DOTNET_BIN="/usr/local/bin/dotnet"
+elif command -v dotnet >/dev/null 2>&1; then DOTNET_BIN="$(command -v dotnet)"
+else echo "_dotnet-wrap: dotnet binary not found in DOTNET_ROOT=$DOTNET_ROOT or PATH" >&2; exit 127
+fi
+exec "$DOTNET_BIN" "${TARGET_DLL}" "$@"
 WRAPSH
 chmod +x "$OATH_TOOLS/bin/_dotnet-wrap.sh"
 

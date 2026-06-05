@@ -19,7 +19,18 @@ For the hosted live-agent mode (optional), you'll additionally need:
 
 ```bash
 git clone https://github.com/GharsallahDev/oath && cd oath
-bash scripts/install-tools.sh
+bash scripts/install-tools.sh                       # macOS
+# OR — on the SANS SIFT Workstation (Ubuntu x86_64):
+bash scripts/install-on-sift.sh
+```
+
+Either installer bootstraps the [Protocol SIFT](https://github.com/teamdfir/protocol-sift)
+baseline first (Claude Code + five DFIR skill packs + PDF reporter under
+`~/.claude/`), then layers OATH on top. **If you already have Protocol SIFT
+installed**, set `OATH_SKIP_PROTOCOL_SIFT=1` to skip the baseline step:
+
+```bash
+OATH_SKIP_PROTOCOL_SIFT=1 bash scripts/install-on-sift.sh
 ```
 
 The installer is idempotent. It will:

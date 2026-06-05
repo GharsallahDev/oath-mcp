@@ -18,12 +18,23 @@ set -euo pipefail
 OATH_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OATH_BIN="${OATH_ROOT}/src/oath/cli.py"
 
-# Detect Python
-PYTHON_BIN="$(command -v python3 || command -v python)"
+# Source the tool environment so the forensic CLIs that reverify() shells out
+# to (MFTECmd, EvtxECmd, RECmd, hayabusa, etc.) are on PATH. Without this, a
+# judge running `./verify.sh <id>` from a fresh shell sees a misleading
+# "[Errno 2] No such file or directory: MFTECmd" failure even though the
+# envelope itself is intact.
+[ -f "$OATH_ROOT/.oath-tools/env.sh" ] && . "$OATH_ROOT/.oath-tools/env.sh"
+
+# Detect Python — prefer the OATH venv if it exists.
+if [ -x "$OATH_ROOT/.venv/bin/python" ]; then
+  PYTHON_BIN="$OATH_ROOT/.venv/bin/python"
+else
+  PYTHON_BIN="$(command -v python3 || command -v python)"
+fi
 if [ -z "$PYTHON_BIN" ]; then
   echo "ERROR: python3 not found on PATH." >&2
   exit 1
 fi
 
 # Boot the OATH CLI in verifier-only mode (no LLM, no MCP, just receipt replay).
-exec "$PYTHON_BIN" -m oath verify "$@"
+exec env PYTHONPATH="${PYTHONPATH:-}:$OATH_ROOT/src" "$PYTHON_BIN" -m oath verify "$@"

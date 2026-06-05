@@ -18,6 +18,27 @@ This repository supports the published preprint:
 The verifier artifact is archived separately at
 [10.5281/zenodo.20549626](https://doi.org/10.5281/zenodo.20549626).
 
+## Relationship to Protocol SIFT
+
+OATH extends [Protocol SIFT](https://github.com/teamdfir/protocol-sift) — the
+open-source autonomous-DFIR baseline (Claude Code + five DFIR skill packs +
+PDF reporter, installed under `~/.claude/`). Protocol SIFT provides the agent
+framework; OATH layers a typed MCP-server tool surface, `Notarized<T>`
+envelopes, and a verifier-gated promotion path on top. Both install scripts
+(`scripts/install-tools.sh`, `scripts/install-on-sift.sh`) call Protocol SIFT's
+own installer first, then install OATH. See
+[docs/ARCHITECTURE.md §"How OATH extends Protocol SIFT"](docs/ARCHITECTURE.md#how-oath-extends-protocol-sift)
+for the architectural diff.
+
+If you already have Protocol SIFT installed (Claude Code present at
+`~/.claude/CLAUDE.md` and the five skill packs at `~/.claude/skills/`), set
+`OATH_SKIP_PROTOCOL_SIFT=1` before running either install script to skip the
+baseline step:
+
+```bash
+OATH_SKIP_PROTOCOL_SIFT=1 bash scripts/install-on-sift.sh
+```
+
 ## Core Idea
 
 LLM-assisted investigation fails dangerously when a fluent model summary is

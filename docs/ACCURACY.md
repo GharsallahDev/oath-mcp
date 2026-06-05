@@ -22,6 +22,8 @@ The deterministic-baseline number is the more interesting one. **It demonstrates
 
 **Model-tier observation.** Gemini 3.1 Pro (the heavier-reasoning tier) scored *below* Gemini 3 Flash on this corpus. The NSS task is mechanical (pick the right partition + right pattern + right filter); Pro's extra ~250k thinking tokens didn't help, and one hosted-model timeout cost it one question's worth. This is consistent with the architectural argument — once the search space is closed via typed-args proposal, the LLM's incremental contribution flattens out; what matters is whether the LLM picks the right closed-form args, not how much it reasons about open-ended Python script generation.
 
+> **Scope.** 92.75% measures **evidence acquisition** on DFIR-Metric Module III (NIST String Search) — the only published LLM-DFIR benchmark in this space. It is **not** a claim of general DFIR reasoning competence. Module III specifically tests "can the agent find the bytes that match a target pattern across two NIST CFTT disk images" — a constrained retrieval task with closed-form answers. The architectural contribution (typed-args proposal under verifier-gated execution) generalizes to other DFIR tasks where the answer can be reduced to typed predicates over deterministic tool outputs; it does not generalize to open-ended forensic narrative tasks (the other DFIR-Metric modules) which OATH has not been scored on. See §8 Limitations for what the headline does NOT claim.
+
 ## §2. Reproducibility
 
 Any examiner can reproduce these numbers from a fresh clone:

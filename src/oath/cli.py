@@ -575,5 +575,43 @@ def serve(transport: str, port: int, logs_dir: str, keys_dir: str, run_id: str |
     sys.exit(mcp_main(argv))
 
 
+@main.command()
+@click.option("--pause", type=float, default=2.5, show_default=True,
+              help="Seconds between scenes (lower = faster demo).")
+@click.option("--handle-id", default="15e9489f6ae6766e", show_default=True,
+              help="EvidenceHandle id of the case to demonstrate.")
+@click.option("--sample-dir", type=click.Path(file_okay=False),
+              default="logs/sample-run", show_default=True,
+              help="Directory containing the sample-run JSONL + index.")
+@click.option("--keys-dir", type=click.Path(file_okay=False),
+              default="keys", show_default=True)
+def demo(pause: float, handle_id: str, sample_dir: str, keys_dir: str) -> None:
+    """Run the autonomous DFIR demo end-to-end (~2-3 min, no further input).
+
+    The operator types this command ONCE. The agent then runs unattended:
+      - mounts the case (handle SHA-256)
+      - runs six typed forensic functions against the real CFReDS Data
+        Leakage Case evidence and signs every output
+      - hits a tampered envelope and visibly self-corrects via the
+        Witness Oath Verifier + Ralph Wiggum Loop
+      - emits a QUARANTINED verdict (suspicion not proved)
+      - emits a VERIFIED verdict over the surviving envelopes
+      - ships the final claim with its replay receipt
+
+    Designed for screencast recording via:
+      asciinema rec -c 'oath demo' video/demo.cast
+    """
+    from pathlib import Path
+
+    from oath.agent.demo import run_demo
+
+    sys.exit(run_demo(
+        pause=pause,
+        handle_id=handle_id,
+        sample_dir=Path(sample_dir),
+        keys_dir=Path(keys_dir),
+    ))
+
+
 if __name__ == "__main__":
     main()
