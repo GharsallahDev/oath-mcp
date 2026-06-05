@@ -29,7 +29,7 @@ The deterministic-baseline number is the more interesting one. **It demonstrates
 Any examiner can reproduce these numbers from a fresh clone:
 
 ```bash
-git clone https://github.com/GharsallahDev/oath && cd oath
+git clone https://github.com/GharsallahDev/oath-mcp && cd oath
 bash scripts/install-tools.sh
 source .oath-tools/env.sh
 

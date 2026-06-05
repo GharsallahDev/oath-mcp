@@ -10,7 +10,7 @@ date-released: "2026-06-05"
 license: MIT
 doi: "10.5281/zenodo.20549626"
 url: "https://doi.org/10.5281/zenodo.20549626"
-repository-code: "https://github.com/GharsallahDev/oath"
+repository-code: "https://github.com/GharsallahDev/oath-mcp"
 preferred-citation:
   type: article
   authors:

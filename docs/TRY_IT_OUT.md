@@ -18,7 +18,7 @@ For the hosted live-agent mode (optional), you'll additionally need:
 ## 2. One-shot install
 
 ```bash
-git clone https://github.com/GharsallahDev/oath && cd oath
+git clone https://github.com/GharsallahDev/oath-mcp && cd oath
 bash scripts/install-tools.sh                       # macOS
 # OR — on the SANS SIFT Workstation (Ubuntu x86_64):
 bash scripts/install-on-sift.sh

@@ -138,7 +138,7 @@ Fetched via the official `Get-ZimmermanTools.ps1` script. Pinned in `scripts/ins
 End-to-end from a fresh git clone:
 
 ```bash
-git clone https://github.com/GharsallahDev/oath && cd oath
+git clone https://github.com/GharsallahDev/oath-mcp && cd oath
 bash scripts/install-tools.sh             # macOS Apple Silicon
 # OR
 bash scripts/install-on-sift.sh           # SIFT Workstation / Ubuntu x86_64

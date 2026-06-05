@@ -96,30 +96,56 @@ secrets, API keys, or operational prompts.
 
 ## Quick Start
 
+OATH is published as a Python MCP server. Four one-liners on a SANS SIFT
+Workstation get you from cold boot to "Claude Code is driving 13 typed
+forensic tools against your evidence":
+
 ```bash
-git clone https://github.com/GharsallahDev/oath
-cd oath
+# 1. Protocol SIFT baseline (Claude Code + DFIR skill packs)
+curl -fsSL https://raw.githubusercontent.com/teamdfir/protocol-sift/main/install.sh | bash
 
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -e ".[dev]"
+# 2. Forensic-binary bootstrap (.NET 9, EZ Tools, Hayabusa — what SIFT lacks)
+curl -fsSL https://raw.githubusercontent.com/GharsallahDev/oath-mcp/main/scripts/bootstrap-forensic-tools.sh | bash
+exec bash    # pick up the new PATH
 
-PYTHONPATH=src python -m pytest tests/integration/test_spoliation.py -q
-PYTHONPATH=src python scripts/show_self_correction.py
+# 3. uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh && exec bash
+
+# 4. Wire OATH into Claude Code (this is what goes on screen in the demo)
+claude mcp add --transport stdio oath -- uvx oath-mcp
 ```
 
-For a full local run against forensic tools, install the pinned toolchain first:
+Then start a session and confirm the 13 typed tools are connected:
 
 ```bash
-bash scripts/install-tools.sh
-source .oath-tools/env.sh
+claude
+# inside Claude:
+/mcp        # → oath: connected · 13 tools
+```
 
+To use the operator CLI (`oath mount`, `oath verify`, `oath demo`) instead
+of driving via Claude Code, install the package as a tool:
+
+```bash
+uv tool install oath-mcp
 oath mount path/to/evidence.E01
 oath verify <envelope-id>
 ```
 
-Linux forensic workstation setup is documented in
-[docs/TRY_IT_OUT.md](docs/TRY_IT_OUT.md).
+Full forensic workstation setup, including the longer-form
+`install-on-sift.sh` alternative and a non-SIFT Docker path, is documented
+in [docs/TRY_IT_OUT.md](docs/TRY_IT_OUT.md).
+
+### Developing locally
+
+For working on `src/oath/`:
+
+```bash
+git clone https://github.com/GharsallahDev/oath-mcp-mcp
+cd oath-mcp
+uv venv && uv pip install -e ".[dev]"
+PYTHONPATH=src python -m pytest tests/integration/test_spoliation.py -q
+```
 
 ## Architecture
 

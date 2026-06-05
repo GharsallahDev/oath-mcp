@@ -7,7 +7,7 @@
 # own SIFT instance.
 #
 # Usage on the SIFT VM:
-#   git clone https://github.com/GharsallahDev/oath ~/oath
+#   git clone https://github.com/GharsallahDev/oath-mcp ~/oath
 #   cd ~/oath
 #   bash scripts/install-on-sift.sh
 #   source .oath-tools/env.sh

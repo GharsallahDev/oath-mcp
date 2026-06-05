@@ -3,32 +3,40 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "oath"
+name = "oath-mcp"
 version = "0.1.0"
-description = "Signed evidence receipts and verifier-gated claims for LLM-assisted digital forensics."
+description = "OATH — typed MCP server + verifier-gated evidence receipts for LLM-assisted digital forensics."
 readme = "README.md"
 license = { text = "MIT" }
-authors = [{ name = "GharsallahDev" }]
+authors = [{ name = "GharsallahDev", email = "email@medsyn.solutions" }]
 requires-python = ">=3.11"
+keywords = ["mcp", "dfir", "forensics", "claude-code", "incident-response", "evidence", "sigma", "hayabusa"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+    "Topic :: System :: Systems Administration",
+]
 
+# Base dependencies — only what `python -m oath.mcp.server` actually imports.
+# Heavy parser bindings (volatility3, yara, regipy, python-evtx, libfwsi,
+# dfir-iris-client) are NOT imported by the MCP server — the server shells out
+# to native forensic binaries (EvtxECmd / MFTECmd / vol / hayabusa). Keeping
+# them in base would make first-run `uvx oath-mcp` slow and fragile. They live
+# in extras for users who want to drive OATH library code directly.
 dependencies = [
-    # MCP server
+    # MCP protocol
     "mcp>=1.0.0",
-    # Crypto / signing
+    # Crypto / signing (Notarized<T>)
     "cryptography>=42.0.0",
     "blake3>=0.4.0",
     "pynacl>=1.5.0",
-    # Evidence parsing
-    "python-evtx>=0.7.4",          # EVTX
-    "construct>=2.10.0",            # struct-parse for registry / MFT
-    "regipy>=4.0.0",                # Windows registry hives
-    "libfwsi-python>=20240315",     # Shell items / ShellBags
-    "yara-python>=4.5.0",           # YARA scanning
-    # Volatility 3 (memory)
-    "volatility3>=2.7.0",
-    # Forensic-specific
-    "dfir-iris-client>=2.0.0",
-    # General tooling
+    # CLI / output / validation
     "click>=8.1.0",
     "pydantic>=2.5.0",
     "rich>=13.7.0",
@@ -38,6 +46,21 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Pull these only if you intend to import OATH parsing libraries directly
+# rather than driving the MCP server (which shells out to native tools).
+parsers = [
+    "python-evtx>=0.7.4",
+    "construct>=2.10.0",
+    "regipy>=4.0.0",
+    "libfwsi-python>=20240315",
+    "yara-python>=4.5.0",
+]
+memory = [
+    "volatility3>=2.7.0",
+]
+iris = [
+    "dfir-iris-client>=2.0.0",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=4.1.0",
@@ -48,17 +71,31 @@ dev = [
 ]
 benchmark = [
     "pandas>=2.2.0",
-    "scikit-learn>=1.4.0",  # for isotonic regression calibration
+    "scikit-learn>=1.4.0",
     "matplotlib>=3.8.0",
 ]
 vertex = [
-    "google-cloud-aiplatform>=1.50.0",  # adversarial corpus generation
+    "google-cloud-aiplatform>=1.50.0",
 ]
 claude = [
-    "anthropic>=0.40.0",  # benchmark live-agent bridge (Anthropic SDK + MCP)
+    "anthropic>=0.40.0",
+]
+all = [
+    "oath-mcp[parsers,memory,iris,benchmark,vertex,claude]",
 ]
 
+[project.urls]
+Homepage = "https://github.com/GharsallahDev/oath-mcp"
+Repository = "https://github.com/GharsallahDev/oath-mcp"
+Issues = "https://github.com/GharsallahDev/oath-mcp/issues"
+"Preprint (Zenodo)" = "https://doi.org/10.5281/zenodo.20549726"
+"Artifact (Zenodo)" = "https://doi.org/10.5281/zenodo.20549626"
+
 [project.scripts]
+# Direct MCP stdio entry point — `claude mcp add ... -- uvx oath-mcp`
+# boots the stdio server without going through the click CLI.
+oath-mcp = "oath.mcp.server:main"
+# Operator CLI — `oath mount`, `oath verify`, `oath demo`.
 oath = "oath.cli:main"
 
 [tool.hatch.build.targets.wheel]

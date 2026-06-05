@@ -14,61 +14,105 @@ spoliation-test attack documented in `tests/integration/test_spoliation.py
 
 ---
 
-## Phase 0 — VM setup (one-time, ~30 minutes, no recording yet)
+## Phase 0 — VM setup (one-time, ~45 minutes, no recording yet)
 
 ### 0.1 Import the SIFT OVA
 
-VirtualBox or VMware. Import `sift-2026-04-22.ova`. Allocate:
+UTM (Apple Silicon) or VirtualBox/VMware (Intel). For UTM the path is
+documented in [`docs/DEVPOST.md` "Challenges we ran into" §4](DEVPOST.md).
+Allocate:
 
-- **8 GB RAM minimum** (16 GB if you have it)
-- **4 CPU cores minimum**
-- **Bridged or NAT networking** (so the VM can reach github + the Anthropic API)
+- **8 GB RAM minimum** (16 GB if you have it; helps Plaso cache)
+- **4 CPU cores minimum** (8 with "Force Multicore" on UTM)
+- **Bridged or NAT networking** (the VM must reach github + Anthropic API)
 - **Shared clipboard enabled host↔guest** (you'll paste a long prompt)
 
 Boot. Login (default SIFT credentials: `sansforensics` / `forensics`).
 
-### 0.2 Clone the OATH repo
+### 0.2 Protocol SIFT baseline
 
-In the SIFT VM terminal:
+This installs Claude Code itself plus the five DFIR skill packs and
+PDF reporter into `~/.claude/`. OATH extends Protocol SIFT.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/teamdfir/protocol-sift/main/install.sh | bash
+```
+
+When it finishes, add Claude Code to PATH if the installer didn't:
+
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
+claude --version    # confirm
+```
+
+### 0.3 Authenticate Claude Code
+
+```bash
+claude
+```
+
+Complete the OAuth flow in the browser when prompted. Exit (`Ctrl+D` or
+type `/exit`) once you see the welcome screen.
+
+### 0.4 Install `uv`
+
+`uvx oath-mcp` (the on-camera install line) needs the `uv` package
+manager:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+exec bash       # pick up the new PATH
+which uvx       # should print: ~/.local/bin/uvx
+```
+
+### 0.5 Bootstrap the forensic binaries
+
+`uvx oath-mcp` pulls only the Python wheel. The MCP server shells out to
+native binaries that SIFT doesn't ship by default (EZ Tools, Hayabusa,
+.NET 9). One curl-pipe-bash installs all of them:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/GharsallahDev/oath-mcp/main/scripts/bootstrap-forensic-tools.sh | bash
+exec bash       # pick up DOTNET_ROOT + the new PATH
+```
+
+Time: ~10 minutes on a fresh SIFT VM (emulation on Apple Silicon is ~5×
+slower than native; budget closer to 25 min there).
+
+Verify:
+
+```bash
+which EvtxECmd hayabusa vol psort.py uvx
+```
+
+All five should print absolute paths.
+
+### 0.6 Install the OATH operator CLI
+
+You'll need `oath mount` and the `scripts/` helpers for evidence staging.
+Install the published wheel as a user tool (separate from the MCP
+spawn — they share the same package but live in different uv envs):
+
+```bash
+uv tool install oath-mcp
+oath --version   # confirm
+```
+
+Also grab the demo helpers from the repo (they're not in the wheel):
 
 ```bash
 cd ~
-git clone https://github.com/GharsallahDev/oath
-cd oath
+git clone https://github.com/GharsallahDev/oath-mcp.git
+cd oath-mcp
 ```
 
-> **If the repo is still private** when you do this, generate a personal
-> access token at github.com/settings/tokens (just the `repo` scope) and
-> use `git clone https://<token>@github.com/GharsallahDev/oath`.
+### 0.7 Stage the CFReDS Data Leakage Case evidence
 
-### 0.3 Install OATH (this installs Protocol SIFT first, then OATH)
+Either copy `cfreds_2015_data_leakage_pc.E01..E04` from your host into
+`~/oath-mcp/corpus/data-leakage-case/` (via shared folder or scp), OR run
+the extraction sequence from `docs/DATASETS.md` §3 to pull from NIST.
 
-```bash
-bash scripts/install-on-sift.sh
-```
-
-This will run for ~10–15 min. It installs:
-
-- Protocol SIFT (Claude Code + 5 DFIR skill packs in `~/.claude/`)
-- .NET 9 SDK + EZ Tools 2026.5.0
-- Hayabusa 3.9.0
-- Python venv with OATH
-
-When it finishes, source the environment:
-
-```bash
-source .oath-tools/env.sh
-oath --version             # should print: oath, version 0.1.0
-```
-
-### 0.4 Stage the CFReDS Data Leakage Case evidence
-
-Either copy the `cfreds_2015_data_leakage_pc.E01..E04` files from your host
-into the VM (via shared folder or scp) and place them in
-`~/oath/corpus/data-leakage-case/`, OR run the extraction sequence from
-`docs/DATASETS.md` §3 to pull them from NIST.
-
-Then mount it (this computes the SHA-256 — takes ~30s):
+Mount it (computes SHA-256, ~30s):
 
 ```bash
 oath mount corpus/data-leakage-case/cfreds_2015_data_leakage_pc.E01
@@ -76,16 +120,16 @@ oath mount corpus/data-leakage-case/cfreds_2015_data_leakage_pc.E01
 
 You should see `handle_id: 15e9489f6ae6766e` (or a fresh one — note it down).
 
-### 0.5 Generate the sample-run envelopes
+### 0.8 Generate the sample-run envelopes
 
 ```bash
 python scripts/export_sample_run.py --handle-id 15e9489f6ae6766e
 ```
 
-Takes ~25 min because of plaso. Run it once, then leave it. The result
-lands at `logs/sample-run/dlc-sample-run.jsonl` (6 envelopes).
+Takes ~25 min because of plaso. Result lands at
+`logs/sample-run/dlc-sample-run.jsonl` (6 envelopes).
 
-### 0.6 Pre-tamper one envelope for the demo
+### 0.9 Pre-tamper one envelope for the demo
 
 ```bash
 bash scripts/prepare-demo.sh
@@ -95,33 +139,24 @@ This copies the sample run into `logs/demo-run/` and tampers the
 `run_hayabusa` envelope's persisted `data` field. Note the printed
 envelope ID — that's the one the verifier will reject when Claude cites it.
 
-### 0.7 Register OATH MCP with Claude Code
+### 0.10 Smoke-test the on-camera command sequence (CRITICAL)
+
+Run the exact lines you're about to record, cold:
 
 ```bash
-bash scripts/install-oath-mcp.sh
-claude mcp list            # should show 'oath' as connected
+claude mcp add --transport stdio oath -- uvx oath-mcp
+claude mcp list                # should show: oath  stdio   ✓ connected
+claude                          # then: /mcp → 'oath: connected · 13 tools' → Ctrl+D
 ```
 
-### 0.8 Authenticate Claude Code
+If anything fails, **fix it now**, don't record. Then remove the
+registration so you can do it fresh on tape:
 
 ```bash
-claude
+claude mcp remove oath
 ```
 
-The first time it runs, it'll prompt for OAuth. Log in with your Anthropic
-account. Exit (Ctrl+D) once connected.
-
-### 0.9 Smoke-test (CRITICAL — do this BEFORE recording)
-
-```bash
-cd ~/oath
-claude
-```
-
-In the Claude session, type `/mcp` — you should see `oath: connected` and
-13 tools available. Then close (Ctrl+D).
-
-### 0.10 Install a screen recorder
+### 0.11 Install a screen recorder
 
 SIFT comes with `simplescreenrecorder` or `kazam` available via apt. OBS
 Studio also works. Configure:
@@ -140,12 +175,13 @@ Test-record 10 seconds and play it back. Confirm audio works.
 
 1. ✅ All terminal windows closed except the one you'll use
 2. ✅ Browser tabs closed (judges don't need to see them)
-3. ✅ `~/oath` is your cwd
-4. ✅ `.oath-tools/env.sh` is sourced (you should see `(.venv)` in your prompt)
-5. ✅ Phone on silent
-6. ✅ Start screen recorder + voice recording. Wait 2 seconds for both to settle.
+3. ✅ `~/oath-mcp` is your cwd
+4. ✅ `which EvtxECmd hayabusa vol psort.py uvx` all return paths
+5. ✅ `claude mcp list` shows NO `oath` entry (you removed it after smoke test)
+6. ✅ Phone on silent
+7. ✅ Start screen recorder + voice recording. Wait 2 seconds for both to settle.
 
-### Scene 1 — "We are on SIFT, Protocol SIFT installed" (0:00 → 0:20)
+### Scene 1 — The marquee MCP install (0:00 → 0:40)
 
 Type, deliberately:
 
@@ -164,9 +200,27 @@ ls ~/.claude/skills/
 **Voiceover:** *"Protocol SIFT is installed — five DFIR skill packs in
 the standard Claude home directory."*
 
-### Scene 2 — Mount real evidence (0:20 → 0:55)
+Pause 1s. Now the marquee line — type it slowly so the viewer sees every
+flag land:
 
-Type:
+```bash
+claude mcp add --transport stdio oath -- uvx oath-mcp
+```
+
+**Voiceover (as you type):** *"One line wires OATH into Claude Code.
+This is the standard MCP install path — same shape as Airtable, same shape
+as Sentry in the Claude Code docs. uv pulls the wheel from PyPI, isolates
+it in its own environment, and Claude Code talks to it over stdio."*
+
+Hit Enter. When it returns, type:
+
+```bash
+claude mcp list
+```
+
+**Voiceover:** *"Registered. Stdio transport. Ready."*
+
+### Scene 2 — Mount real evidence (0:40 → 1:10)
 
 ```bash
 oath mount corpus/data-leakage-case/cfreds_2015_data_leakage_pc.E01
@@ -180,9 +234,7 @@ downstream signed claim."*
 
 When the handle appears, leave it on screen for 2s.
 
-### Scene 3 — Boot Claude with OATH MCP (0:55 → 1:15)
-
-Type:
+### Scene 3 — Boot Claude, confirm tools (1:10 → 1:30)
 
 ```bash
 claude
@@ -196,14 +248,12 @@ When Claude's prompt appears, type:
 
 The output shows `oath: connected · 13 tools`.
 
-**Voiceover:** *"Claude Code. OATH's custom MCP server is connected.
-Thirteen typed forensic functions. No execute shell. The model
-physically cannot run destructive commands."*
+**Voiceover:** *"Thirteen typed forensic functions. No execute shell.
+The model can only call signed, schema-validated tools."*
 
-### Scene 4 — The one prompt (1:15 → 1:25)
+### Scene 4 — The one prompt (1:30 → 1:45)
 
-Paste this verbatim into Claude (use the SIFT shared-clipboard paste, or
-type the whole thing):
+Paste this verbatim into Claude (use SIFT's shared-clipboard paste):
 
 ```
 You are a senior DFIR analyst investigating the NIST CFReDS Data Leakage
@@ -228,12 +278,11 @@ sequence the tools, catch its own mistake, and self-correct."*
 
 Hit Enter. **DO NOT TOUCH THE KEYBOARD AGAIN.**
 
-### Scene 5 — Autonomous execution (1:25 → 3:30)
+### Scene 5 — Autonomous execution (1:45 → 3:45)
 
 Claude will now autonomously:
 
-1. **List existing envelopes** via `oath_list_handles` or by reading
-   `logs/demo-run/demo-run.jsonl`
+1. **List existing envelopes** by reading `logs/demo-run/demo-run.jsonl`
 2. **Inspect the parse_evtx envelope** — sees 4624 auth events
 3. **Inspect the parse_registry envelope** — sees suspect "informant" RID 1000
 4. **Inspect the parse_usnjrnl envelope** — sees Outlook OST deletions
@@ -246,7 +295,7 @@ Claude will now autonomously:
 8. **Re-run `run_hayabusa` fresh** to mint a clean envelope
 9. **Build a second claim** citing the fresh envelope
 10. **Call `oath_verify_claim`** → returns `VERIFIED`
-11. **Ships the finding** as the answer
+11. **Ship the finding** as the answer
 
 **Voiceover beats** (don't read these word-for-word; ad-lib over what's on
 screen, but hit these moments):
@@ -268,13 +317,12 @@ screen, but hit these moments):
 
 - When the second `VERIFIED` lands: *"Verified. The finding ships."*
 
-### Scene 6 — Replay receipt from a fresh shell (3:30 → 3:55)
+### Scene 6 — Replay receipt from a fresh shell (3:45 → 4:10)
 
 Open a **second terminal** (Ctrl+Alt+T or new tab). Type:
 
 ```bash
-cd ~/oath
-./verify.sh <envelope-id-from-the-verified-claim>
+oath verify <envelope-id-from-the-verified-claim>
 ```
 
 (Read the envelope ID off Claude's output above.)
@@ -283,14 +331,14 @@ You should see `PASS` in under 3 seconds.
 
 **Voiceover:** *"A fresh shell. No agent. No LLM. The replay receipt
 re-derives the finding from the original image SHA-256 in three seconds.
-This is what cannot replay does not exist."*
+What cannot replay does not exist."*
 
-### Scene 7 — Receipt Explorer click-through (3:55 → 4:25)
+### Scene 7 — Receipt Explorer click-through (4:10 → 4:35)
 
 Open the browser. Navigate to either:
 
 - The local instance: `firefox http://localhost:8765` (if you ran
-  `python3 -m http.server 8765` in `~/oath/web/` ahead of time)
+  `python3 -m http.server 8765` in `~/oath-mcp/web/` ahead of time)
 - The deployed: `https://oath-receipts.pages.dev/` (if deployed)
 
 Click the same envelope from Scene 6.
@@ -302,13 +350,13 @@ Trust the math."*
 
 Linger on the modal for 3s.
 
-### Scene 8 — Close (4:25 → 4:45)
+### Scene 8 — Close (4:35 → 4:50)
 
 Close the browser. Voice only:
 
-*"OATH. Autonomous DFIR with a court-admissible chain of custody.
-github dot com slash GharsallahDev slash oath. Zenodo DOI in the
-description."*
+*"OATH MCP. Autonomous DFIR with a court-admissible chain of custody.
+One line installs it. github dot com slash GharsallahDev slash oath dash
+mcp. Zenodo DOI in the description."*
 
 Stop recording.
 
@@ -352,22 +400,24 @@ Name: `oath-demo.mp4`
 YouTube unlisted is the standard choice:
 
 1. Upload at studio.youtube.com
-2. Visibility: **Unlisted** (so only people with the link can find it)
+2. Visibility: **Unlisted** (only people with the link can find it)
 3. Title: `OATH — Autonomous DFIR with verifier-gated claims`
 4. Description: paste this verbatim:
 
 ```
 OATH is an autonomous DFIR agent with cryptographic chain of custody for
 LLM-produced forensic findings. Built on the SANS SIFT Workstation,
-extending Protocol SIFT.
+extending Protocol SIFT. Wired into Claude Code via one line:
+
+    claude mcp add --transport stdio oath -- uvx oath-mcp
 
 Architecture: Custom MCP Server (approach #2 in the Find Evil! taxonomy)
 + Direct Agent Extension features (Ralph Wiggum self-correction loop +
 Witness Oath Verifier) layered on top.
 
-Repository: https://github.com/GharsallahDev/oath
-Preprint: https://doi.org/10.5281/zenodo.20549726
-Artifact: https://doi.org/10.5281/zenodo.20549626
+Repository: https://github.com/GharsallahDev/oath-mcp
+Preprint:   https://doi.org/10.5281/zenodo.20549726
+Artifact:   https://doi.org/10.5281/zenodo.20549626
 ```
 
 5. Copy the unlisted URL.
@@ -386,23 +436,40 @@ sections.
 
 ```bash
 claude mcp list
-# If oath isn't listed:
-bash scripts/install-oath-mcp.sh
-# Restart claude:
-claude
+# If oath isn't listed or shows as ✗ failed:
+claude mcp remove oath
+claude mcp add --transport stdio oath -- uvx oath-mcp
+claude mcp list
 ```
 
-### "Claude calls a tool and it errors"
-
-Run the tool yourself from the shell to reproduce:
+If `uvx` itself can't resolve `oath-mcp`, you're not on the published
+version yet — use the git+ fallback:
 
 ```bash
-source .oath-tools/env.sh
-PYTHONPATH=src python -m oath.mcp.server --help
+claude mcp add --transport stdio oath -- \
+    uvx --from git+https://github.com/GharsallahDev/oath-mcp.git oath-mcp
 ```
 
-Common cause: env.sh not sourced before installing the MCP server.
-Re-run `bash scripts/install-oath-mcp.sh` after sourcing env.sh.
+### "Claude calls a tool and it errors with 'EvtxECmd: command not found'"
+
+The MCP subprocess Claude Code spawns doesn't see `EvtxECmd` on PATH. This
+means `bootstrap-forensic-tools.sh` either wasn't run or didn't take
+effect. Verify the PATH entry from your interactive shell:
+
+```bash
+which EvtxECmd     # should point under ~/.local/share/oath-tools/bin/
+```
+
+If empty, re-run:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/GharsallahDev/oath-mcp/main/scripts/bootstrap-forensic-tools.sh | bash
+exec bash
+```
+
+The bootstrap writes PATH + `DOTNET_ROOT` exports into `~/.bashrc`. The
+MCP subprocess inherits `~/.bashrc` because Claude Code spawns it with the
+user's login shell.
 
 ### "RALPH_WIGGUM doesn't fire"
 
@@ -442,7 +509,8 @@ If it doesn't, append to your prompt:
 ## Why this video wins
 
 1. **Custom MCP Server (Approach #2)** is visibly the running architecture
-   — judges see 13 typed tools in Claude's palette and no shell.
+   — judges see the canonical `claude mcp add ... -- uvx oath-mcp` install
+   line, then 13 typed tools in Claude's palette, and no shell.
 2. **Direct Agent Extension (Approach #1)** features layer on top — Ralph
    Wiggum loop + verifier validation.
 3. **Real self-correction** — the `data_blake3` rejection is the real

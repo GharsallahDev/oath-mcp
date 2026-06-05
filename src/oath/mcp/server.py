@@ -718,10 +718,24 @@ async def _async_main(*, logs_dir: Path, keys_dir: Path, run_id: str | None) -> 
         await app.run(read_stream, write_stream, app.create_initialization_options())
 
 
+def _default_data_root() -> Path:
+    """Return the per-user OATH state root, honoring XDG_DATA_HOME.
+
+    `uvx oath-mcp` typically runs with whatever cwd Claude Code spawned it in,
+    so cwd-relative ./logs / ./keys defaults would scatter run state across
+    every project the analyst opens. XDG keeps everything under one stable
+    location: $XDG_DATA_HOME/oath, or ~/.local/share/oath as the fallback.
+    """
+    xdg = os.environ.get("XDG_DATA_HOME")
+    base = Path(xdg).expanduser() if xdg else Path.home() / ".local" / "share"
+    return base / "oath"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="oath-mcp", description="OATH MCP server")
-    parser.add_argument("--logs-dir", type=Path, default=Path("./logs"))
-    parser.add_argument("--keys-dir", type=Path, default=Path("./keys"))
+    data_root = _default_data_root()
+    parser.add_argument("--logs-dir", type=Path, default=data_root / "logs")
+    parser.add_argument("--keys-dir", type=Path, default=data_root / "keys")
     parser.add_argument(
         "--run-id",
         type=str,
@@ -730,6 +744,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--version", action="version", version=f"oath-mcp {__version__}")
     args = parser.parse_args(argv)
+    args.logs_dir.mkdir(parents=True, exist_ok=True)
+    args.keys_dir.mkdir(parents=True, exist_ok=True)
 
     try:
         asyncio.run(

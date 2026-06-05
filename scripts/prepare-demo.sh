@@ -47,7 +47,7 @@ cp "$SRC_DIR/$SRC_RUN.index" "$DEMO_DIR/$DEMO_RUN.index"
 
 # Tamper the run_hayabusa envelope in place. Use Python so the canonical
 # JSON shape is preserved exactly — `jq` would reorder keys.
-"$OATH_ROOT/.venv/bin/python" - "$DEMO_DIR/$DEMO_RUN.jsonl" <<'PY'
+"$(command -v python3 || command -v python || echo "$OATH_ROOT/.venv/bin/python")" - "$DEMO_DIR/$DEMO_RUN.jsonl" <<'PY'
 import json, sys
 from pathlib import Path
 
@@ -81,7 +81,7 @@ PY
 
 # Print the tampered envelope id (the BLAKE3 of the signed header) so we
 # can name it in the prompt or the recording shot list.
-"$OATH_ROOT/.venv/bin/python" - "$DEMO_DIR/$DEMO_RUN.jsonl" "$DEMO_DIR/$DEMO_RUN.index" <<'PY'
+"$(command -v python3 || command -v python || echo "$OATH_ROOT/.venv/bin/python")" - "$DEMO_DIR/$DEMO_RUN.jsonl" "$DEMO_DIR/$DEMO_RUN.index" <<'PY'
 import json, sys
 from pathlib import Path
 
