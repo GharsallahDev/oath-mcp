@@ -2,14 +2,21 @@
 
 Verifier-gated evidence receipts for LLM-assisted digital forensics.
 
+[![Preprint DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20549726.svg)](https://doi.org/10.5281/zenodo.20549726)
+[![Artifact DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20549626.svg)](https://doi.org/10.5281/zenodo.20549626)
+
 OATH is a research prototype for making forensic claims replayable. It separates
 what an LLM proposes from what the evidence proves: forensic tools produce signed
 `Notarized<T>` envelopes, and the Witness Oath Verifier promotes only claims that
 can be deterministically re-derived from the original evidence bytes.
 
-This repository supports the paper:
+This repository supports the published preprint:
 
 > **OATH: Notarized Evidence Envelopes for LLM-Assisted Forensic Claims**
+> Zenodo DOI: [10.5281/zenodo.20549726](https://doi.org/10.5281/zenodo.20549726)
+
+The verifier artifact is archived separately at
+[10.5281/zenodo.20549626](https://doi.org/10.5281/zenodo.20549626).
 
 ## Core Idea
 
@@ -56,9 +63,10 @@ Full methodology and audit notes are in [docs/ACCURACY.md](docs/ACCURACY.md).
 
 ## Artifact Release
 
-A verifier-focused artifact release is available from:
+A verifier-focused artifact release is archived on Zenodo:
 
-https://github.com/GharsallahDev/oath/releases
+- Artifact: [OATH verifier artifact v0.1.0](https://doi.org/10.5281/zenodo.20549626)
+- Preprint: [OATH: Notarized Evidence Envelopes for LLM-Assisted Forensic Claims](https://doi.org/10.5281/zenodo.20549726)
 
 The release is intended to let an independent reviewer answer the narrow
 question: does the receipt, signature, canonicalization, replay, and
@@ -138,6 +146,7 @@ LLM-assisted forensic claims auditable.
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Artifact release notes](docs/ARTIFACT.md)
+- [Publication and citation notes](docs/PUBLICATION.md)
 - [Accuracy and benchmark notes](docs/ACCURACY.md)
 - [Dataset documentation](docs/DATASETS.md)
 - [Try-it-out instructions](docs/TRY_IT_OUT.md)

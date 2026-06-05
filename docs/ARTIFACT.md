@@ -2,6 +2,12 @@
 
 This document describes the public artifact boundary for OATH.
 
+The verifier artifact is published on Zenodo:
+
+- DOI: [10.5281/zenodo.20549626](https://doi.org/10.5281/zenodo.20549626)
+- Version: `v0.1.0`
+- Related preprint: [10.5281/zenodo.20549726](https://doi.org/10.5281/zenodo.20549726)
+
 The artifact release is intentionally verifier-focused. It contains the material
 needed to inspect and exercise the receipt design without exposing private case
 data, signing secrets, API keys, or operational prompts.

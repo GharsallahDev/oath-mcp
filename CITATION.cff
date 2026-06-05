@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use OATH, cite the preprint and the verifier artifact."
+title: "OATH verifier artifact v0.1.0"
+type: software
+authors:
+  - family-names: Gharsallah
+    given-names: Malek
+version: "v0.1.0"
+date-released: "2026-06-05"
+license: MIT
+doi: "10.5281/zenodo.20549626"
+url: "https://doi.org/10.5281/zenodo.20549626"
+repository-code: "https://github.com/GharsallahDev/oath"
+preferred-citation:
+  type: article
+  authors:
+    - family-names: Gharsallah
+      given-names: Malek
+  title: "OATH: Notarized Evidence Envelopes for LLM-Assisted Forensic Claims"
+  year: 2026
+  doi: "10.5281/zenodo.20549726"
+  url: "https://doi.org/10.5281/zenodo.20549726"
