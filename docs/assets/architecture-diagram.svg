@@ -1,0 +1,174 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 980" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0E1218"/>
+      <stop offset="1" stop-color="#121826"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6FD0C9"/>
+      <stop offset="1" stop-color="#5AB7E0"/>
+    </linearGradient>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6FD0C9"/>
+    </marker>
+    <marker id="arrowReturn" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#9AA6B4"/>
+    </marker>
+  </defs>
+
+  <rect width="1400" height="980" fill="url(#bgGrad)"/>
+
+  <!-- Title -->
+  <text x="700" y="48" text-anchor="middle" fill="#E8EEF5" font-size="26" font-weight="700" letter-spacing="2">OATH — ARCHITECTURE</text>
+  <text x="700" y="76" text-anchor="middle" fill="#6FD0C9" font-size="14" font-weight="500" letter-spacing="3">CUSTOM MCP SERVER · APPROACH #2</text>
+
+  <!-- ============ Operator + Claude Code ============ -->
+  <g transform="translate(80,130)">
+    <rect width="220" height="100" rx="12" fill="#1B2230" stroke="#2C3850" stroke-width="1.5"/>
+    <text x="110" y="38" text-anchor="middle" fill="#E8EEF5" font-size="16" font-weight="600">Operator</text>
+    <text x="110" y="60" text-anchor="middle" fill="#9AA6B4" font-size="12">DFIR analyst</text>
+    <text x="110" y="82" text-anchor="middle" fill="#9AA6B4" font-size="11" font-family="ui-monospace, 'SF Mono', Menlo, monospace">prompts · /mcp · views findings</text>
+  </g>
+
+  <g transform="translate(420,130)">
+    <rect width="280" height="100" rx="12" fill="#1B2230" stroke="#2C3850" stroke-width="1.5"/>
+    <text x="140" y="34" text-anchor="middle" fill="#E8EEF5" font-size="16" font-weight="600">Claude Code · Opus 4.8</text>
+    <text x="140" y="58" text-anchor="middle" fill="#9AA6B4" font-size="12">operator-facing agent</text>
+    <text x="140" y="80" text-anchor="middle" fill="#6FD0C9" font-size="11" font-family="ui-monospace, 'SF Mono', Menlo, monospace">claude mcp add ... -- uvx oath-mcp</text>
+  </g>
+
+  <!-- Operator ↔ Claude -->
+  <line x1="300" y1="180" x2="416" y2="180" stroke="#6FD0C9" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="416" y1="200" x2="304" y2="200" stroke="#9AA6B4" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrowReturn)"/>
+  <text x="360" y="172" text-anchor="middle" fill="#9AA6B4" font-size="11">prompt</text>
+  <text x="360" y="218" text-anchor="middle" fill="#9AA6B4" font-size="11">findings</text>
+
+  <!-- ============ MCP Boundary ============ -->
+  <g transform="translate(820,130)">
+    <rect width="500" height="100" rx="12" fill="#1B2230" stroke="#5AB7E0" stroke-width="2" stroke-dasharray="6 4"/>
+    <text x="250" y="34" text-anchor="middle" fill="#5AB7E0" font-size="13" font-weight="700" letter-spacing="2">MCP / STDIO TRANSPORT</text>
+    <text x="250" y="58" text-anchor="middle" fill="#9AA6B4" font-size="12">JSON-RPC over stdin/stdout</text>
+    <text x="250" y="80" text-anchor="middle" fill="#9AA6B4" font-size="11" font-family="ui-monospace, 'SF Mono', Menlo, monospace">tool calls · typed schemas · structured returns</text>
+  </g>
+
+  <line x1="700" y1="180" x2="816" y2="180" stroke="#6FD0C9" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- ============ OATH MCP Server (16 tools) ============ -->
+  <g transform="translate(80,290)">
+    <rect width="1240" height="280" rx="14" fill="#161E2C" stroke="#6FD0C9" stroke-width="2"/>
+    <text x="620" y="38" text-anchor="middle" fill="#E8EEF5" font-size="20" font-weight="700">oath-mcp Server · 16 Typed MCP Tools</text>
+    <text x="620" y="60" text-anchor="middle" fill="#9AA6B4" font-size="12">no execute_shell · no arbitrary code paths · every output → signed Notarized&lt;T&gt; envelope</text>
+
+    <!-- Left column: 11 forensic wrappers -->
+    <g transform="translate(40,90)">
+      <text x="0" y="0" fill="#6FD0C9" font-size="13" font-weight="700" letter-spacing="2">11 FORENSIC WRAPPERS</text>
+      <g font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="12" fill="#D5DAE2">
+        <text x="0" y="28">parse_evtx · parse_mft · parse_registry</text>
+        <text x="0" y="48">parse_usnjrnl · parse_amcache · parse_prefetch</text>
+        <text x="0" y="68">run_hayabusa · plaso_supertimeline · vol3_query</text>
+        <text x="0" y="88">find_strings_on_image</text>
+        <text x="0" y="108">enumerate_credential_artifacts</text>
+      </g>
+      <text x="0" y="148" fill="#9AA6B4" font-size="11" font-style="italic">each binds image_sha256 · canonical args · stdout BLAKE3 · ed25519 sig</text>
+    </g>
+
+    <!-- Divider -->
+    <line x1="620" y1="100" x2="620" y2="260" stroke="#2C3850" stroke-width="1.5"/>
+
+    <!-- Right column: 5 control + inspection -->
+    <g transform="translate(660,90)">
+      <text x="0" y="0" fill="#5AB7E0" font-size="13" font-weight="700" letter-spacing="2">5 CONTROL · INSPECTION</text>
+      <g font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="12" fill="#D5DAE2">
+        <text x="0" y="28">oath_mount · oath_list_handles</text>
+        <text x="0" y="48">oath_list_envelopes · oath_read_envelope</text>
+        <text x="0" y="68">oath_verify_claim</text>
+      </g>
+      <text x="0" y="108" fill="#9AA6B4" font-size="11" font-style="italic">preserves the typed boundary across runs;</text>
+      <text x="0" y="124" fill="#9AA6B4" font-size="11" font-style="italic">verify_claim is the only path DRAFT → CONFIRMED</text>
+    </g>
+  </g>
+
+  <!-- ============ Below: Forensic Binaries + Notarized Chain + Verifier ============ -->
+  <!-- Forensic Binaries -->
+  <g transform="translate(80,620)">
+    <rect width="340" height="140" rx="12" fill="#1B2230" stroke="#2C3850" stroke-width="1.5"/>
+    <text x="170" y="32" text-anchor="middle" fill="#E8EEF5" font-size="15" font-weight="600">Forensic Binaries</text>
+    <g font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="11" fill="#9AA6B4">
+      <text x="20" y="58">EZ Tools 2026.5.0 (EvtxECmd · MFTECmd · RECmd ...)</text>
+      <text x="20" y="78">Hayabusa 3.9.0 (Sigma triage)</text>
+      <text x="20" y="98">plaso 20260512 · Sleuthkit · Volatility 3</text>
+      <text x="20" y="118">.NET 9 runtime · libewf · ntfs-3g</text>
+    </g>
+  </g>
+
+  <!-- Notarized chain -->
+  <g transform="translate(450,620)">
+    <rect width="350" height="140" rx="12" fill="#1B2230" stroke="#6FD0C9" stroke-width="1.5"/>
+    <text x="175" y="32" text-anchor="middle" fill="#6FD0C9" font-size="15" font-weight="600">Notarized&lt;T&gt; chain</text>
+    <text x="175" y="52" text-anchor="middle" fill="#9AA6B4" font-size="11">logs/envelopes/&lt;run_id&gt;.jsonl</text>
+    <g font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="11" fill="#D5DAE2">
+      <text x="20" y="78">image_sha256 · stdout_blake3 · data_blake3</text>
+      <text x="20" y="96">args_canonical (RFC 8785 JCS)</text>
+      <text x="20" y="114">prev_hash · model_id · prompt_hash</text>
+      <text x="20" y="132">ed25519 signature over the whole header</text>
+    </g>
+  </g>
+
+  <!-- Witness Oath Verifier -->
+  <g transform="translate(830,620)">
+    <rect width="490" height="140" rx="12" fill="#1B2230" stroke="#5AB7E0" stroke-width="2"/>
+    <text x="245" y="32" text-anchor="middle" fill="#5AB7E0" font-size="15" font-weight="700">Witness Oath Verifier</text>
+    <g font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="11" fill="#D5DAE2">
+      <text x="24" y="58">1. verify ed25519 signature over canonical header</text>
+      <text x="24" y="76">2. recompute data_blake3 over envelope.data</text>
+      <text x="24" y="94">3. reverify() the cited tool — BLAKE3 of stdout match</text>
+      <text x="24" y="112">4. predicate match against typed records</text>
+      <text x="24" y="130">5. aggregate verdict</text>
+    </g>
+  </g>
+
+  <!-- Verdicts row -->
+  <g transform="translate(830,790)">
+    <rect width="155" height="58" rx="8" fill="#1B3025" stroke="#4EC58F" stroke-width="1.5"/>
+    <text x="77" y="24" text-anchor="middle" fill="#4EC58F" font-size="13" font-weight="700">VERIFIED</text>
+    <text x="77" y="44" text-anchor="middle" fill="#9AA6B4" font-size="10">claim ships</text>
+  </g>
+  <g transform="translate(998,790)">
+    <rect width="155" height="58" rx="8" fill="#2E2D1B" stroke="#D5B84D" stroke-width="1.5"/>
+    <text x="77" y="24" text-anchor="middle" fill="#D5B84D" font-size="13" font-weight="700">QUARANTINED</text>
+    <text x="77" y="44" text-anchor="middle" fill="#9AA6B4" font-size="10">visible · not promoted</text>
+  </g>
+  <g transform="translate(1166,790)">
+    <rect width="154" height="58" rx="8" fill="#321820" stroke="#E47AA5" stroke-width="1.5"/>
+    <text x="77" y="24" text-anchor="middle" fill="#E47AA5" font-size="13" font-weight="700">RALPH_WIGGUM</text>
+    <text x="77" y="44" text-anchor="middle" fill="#9AA6B4" font-size="10">re-derive · self-correct</text>
+  </g>
+
+  <!-- Replay receipt -->
+  <g transform="translate(80,790)">
+    <rect width="720" height="58" rx="8" fill="#15212F" stroke="#5AB7E0" stroke-width="1.5"/>
+    <text x="22" y="24" fill="#5AB7E0" font-size="13" font-weight="700" font-family="ui-monospace, 'SF Mono', Menlo, monospace">oath verify &lt;envelope-id&gt;</text>
+    <text x="22" y="46" fill="#9AA6B4" font-size="11">Pure Python · ~3 sec · no LLM · no API key · re-derives finding from image SHA-256</text>
+  </g>
+
+  <!-- Arrows: server → binaries, server → chain, server → verifier -->
+  <line x1="250" y1="570" x2="250" y2="616" stroke="#6FD0C9" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="625" y1="570" x2="625" y2="616" stroke="#6FD0C9" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="1075" y1="570" x2="1075" y2="616" stroke="#5AB7E0" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Verifier verdict arrows -->
+  <line x1="908" y1="762" x2="908" y2="788" stroke="#4EC58F" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="1076" y1="762" x2="1076" y2="788" stroke="#D5B84D" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="1244" y1="762" x2="1244" y2="788" stroke="#E47AA5" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- RALPH_WIGGUM loops back to Claude Code -->
+  <path d="M 1320 818 Q 1380 818 1380 600 Q 1380 130 700 175" fill="none" stroke="#E47AA5" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrowReturn)"/>
+  <text x="1392" y="500" fill="#E47AA5" font-size="11" transform="rotate(90, 1392, 500)">self-correction</text>
+
+  <!-- Trust boundary -->
+  <g transform="translate(80,892)">
+    <rect width="1240" height="60" rx="10" fill="#0A1118" stroke="#2C3850" stroke-width="1" stroke-dasharray="4 4"/>
+    <text x="22" y="24" fill="#6FD0C9" font-size="12" font-weight="700" letter-spacing="2">TRUST BOUNDARY · architectural guardrails (not prompt-based)</text>
+    <text x="22" y="46" fill="#9AA6B4" font-size="11" font-family="ui-monospace, 'SF Mono', Menlo, monospace">image_sha256 · tool+version · args_canonical · stdout_blake3 · data_blake3 · prev_hash · model_id · prompt_hash · ed25519_sig</text>
+  </g>
+</svg>

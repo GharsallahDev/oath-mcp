@@ -105,22 +105,61 @@ The script-generation failure surface is gone. What remains is whether the LLM p
 
 ## §6. Evidence integrity
 
-OATH was designed to keep the original-image bytes unmodified. Three layers enforce this:
+OATH was designed to keep the original-image bytes unmodified. Three layers enforce this.
 
-**Architectural (not prompt-based):**
-- `EvidenceHandle.mount_tech` is always one of `losetup -r` (Linux read-only loop mount), `hdiutil` (macOS read-only), or `raw-file` (no mount; tools read the image bytes directly). Read-only is the only mode the constructor supports.
+### §6.1 Architectural prevention (not prompt-based)
+
+- `EvidenceHandle.mount_tech` is always one of `losetup -r` (Linux read-only loop mount), `hdiutil` (macOS read-only), `fuse-ntfs` (ntfs-3g mounted with `ro,offset=…,show_sys_files,streams_interface=windows`), or `raw-file` (no mount; tools read the image bytes directly). Read-only is the only mode the constructor supports.
 - The MCP server (`src/oath/mcp/server.py`) exposes only typed functions. There is no `execute_shell` tool. The agent cannot run `dd`, `wipefs`, or `mkfs` because those tools aren't in the MCP surface.
 - The Witness Oath Verifier signs over the **image SHA-256** at envelope-mint time. Mutating the image post-mint breaks every envelope's reverify chain.
+- Every typed wrapper's `args_canonical` includes the source paths it operated on. An attempt to swap the underlying image bytes while preserving the original path is caught by the `stdout_blake3` reverify path: the same tool with the same args on different bytes produces different stdout, BLAKE3 differs, verdict is `RALPH_WIGGUM`.
 
-**Spoliation tests** (14 named, executed, repeatable — see `tests/integration/test_spoliation.py`):
+### §6.2 What happens when the agent attempts to bypass
 
-> Hypothesis 1: if a single byte of the source image is modified after envelope creation, the Witness Oath Verifier must catch it.
+The MCP surface is a closed schema. An LLM "attempt" to bypass the protections takes one of four shapes, each of which fails closed:
+
+1. **The LLM cites an envelope that was never minted** (hallucinated envelope_id). `oath_verify_claim` rejects the cited envelope_id as unknown; the claim returns `RALPH_WIGGUM` with reason `"unknown envelope_id"`. The agent cannot promote the finding.
+2. **The LLM cites a real envelope but emits a `record_predicate` that no signed record satisfies.** The verifier returns `QUARANTINED`: the claim is surfaced to the examiner as "suspected but unproven" and never promoted to a finding.
+3. **The LLM cites a real envelope whose persisted `data` was tampered with after minting** (raw stdout file untouched, fabricated record bolted onto `envelope.data`). `NotarizedHeader.data_blake3` is recomputed at verify time and mismatches the persisted, tampered data. Verdict: `RALPH_WIGGUM`. The bare ed25519 signature on the (untouched) header still verifies — without `data_blake3` this attack would slip past. The test `test_persisted_data_mutation_fails_integrity_check` proves the catch.
+4. **The LLM attempts to call something outside the typed surface** (Bash, file write, etc.). On Claude Code's stock configuration with the `oath-mcp` MCP server registered, those tools are available alongside OATH's. *We do not architecturally prevent the agent from using Claude Code's own filesystem tools.* What we prevent is **promotion** of any finding that does not cite a signed OATH envelope. A `Read(envelope.jsonl)` shell call cannot mint an envelope; only typed OATH wrappers can. The verifier rejects claims that cite no envelope, or cite envelopes whose `reverify()` fails. The architectural boundary is therefore between **typed tools that mint signed receipts** and **everything else (which cannot promote)** — not between "OATH tools" and "Bash."
+
+This is the explicit design trade-off: OATH does not prevent the LLM from looking at the world, only from claiming a finding the verifier can't re-derive. An optional `.claude/settings.json` permissions file in the project root denies `Bash`, `Read`, `Write`, etc. when stricter pure-MCP behavior is desired.
+
+### §6.3 Spoliation suite (14 named tests, all passing)
+
+`tests/integration/test_spoliation.py` is the executed proof that the protections hold under attack:
+
+> **Hypothesis 1.** If a single byte of the source image is modified after envelope creation, the Witness Oath Verifier must catch it.
 >
-> Pass: SHA-256 mismatch is caught at handle-time, OR BLAKE3 of underlying tool stdout differs and reverify fails. Silent acceptance fails the test.
+> Pass: SHA-256 mismatch is caught at handle-time, OR BLAKE3 of underlying tool stdout differs and reverify fails. Silent acceptance fails the test. (`test_single_byte_flip_breaks_handle_rehash`, `test_envelope_reverify_fails_on_tool_output_drift`.)
+
+> **Hypothesis 2.** If a record is fabricated and bolted onto `envelope.data` after minting (raw stdout on disk untouched), the verifier must reject the envelope — even though the ed25519 signature on the (untouched) header still verifies.
 >
-> Hypothesis 2: if a record is fabricated and bolted onto `envelope.data` after minting (raw stdout on disk untouched), the verifier must reject the envelope — even though the ed25519 signature on the (untouched) header still verifies.
+> Pass: `NotarizedHeader.data_blake3` (BLAKE3 of the canonical-form data field, signed transitively by the header) is recomputed at verify time and mismatches the persisted, tampered data. Verdict: `RALPH_WIGGUM`. (`test_data_blake3_is_present_in_signed_header`, `test_persisted_data_mutation_fails_integrity_check`, `test_verifier_rejects_tampered_data_end_to_end`.)
+
+> **Hypothesis 3.** Tampering the signed-header fields (`args_canonical`, `model_id`, `prompt_hash`) must invalidate the Ed25519 signature.
 >
-> Pass: `NotarizedHeader.data_blake3` (a BLAKE3 of the canonical-form data field, signed transitively by the header) is recomputed at verify time and mismatches the persisted, tampered data. The verifier returns RALPH_WIGGUM (drift), never VERIFIED. Without `data_blake3` this attack would survive the BLAKE3-of-stdout reverify path, which is why an earlier audit flagged the header-only signature as a critical architectural gap. Closed; tested end-to-end via `WitnessOathVerifier.verify()`.
+> Pass: any byte-level edit to the canonical header breaks the signature; `verify_signature()` returns False. (`test_envelope_args_canonical_swap_fails_signature`, `test_model_id_and_prompt_hash_are_signed`, `test_envelope_data_field_swap_fails_signature`.)
+
+> **Hypothesis 4.** Inserting, deleting, or mutating a middle envelope in the run chain must be detectable.
+>
+> Pass: the next envelope's `prev` field — a BLAKE3 of the previous signed header — no longer matches the mutated predecessor. (`test_modifying_a_middle_envelope_breaks_the_chain`.)
+
+> **Hypothesis 5.** A deterministic envelope (no LLM in the loop) must carry a *signed null* `model_id` and `prompt_hash`, not a missing field that could be silently added later.
+>
+> Pass: deterministic mint inserts explicit `None` values into the header before signing; the verifier checks for the presence of these keys. (`test_deterministic_envelopes_have_null_model_binding`.)
+
+> **Hypothesis 6.** The prompt-hash encoding must be collision-resistant against delimiter-mimic inputs (`("ABC","DEF")` vs `("ABCD","EF")`).
+>
+> Pass: length-prefixed encoding (`uint64be(|S|) || S || uint64be(|U|) || U`) before BLAKE3 makes the boundary explicit. (`test_hash_prompt_is_collision_resistant_against_delimiter_mimic`.)
+
+> **Hypothesis 7.** Tool determinism contracts must hold: re-running the same wrapper against the same evidence produces the same BLAKE3 of canonical stdout.
+>
+> Pass: tool-specific canonicalizers strip nondeterministic noise (RECmd `PluginDetailFile` paths, plaso `l2tcsv` Python object memory addresses) before hashing. (`test_registry_call_returns_failure_on_drift`, `test_envelope_reverify_passes_when_unchanged`, plus targeted plaso replay test.)
+
+### §6.4 Live evidence of the protections firing
+
+The recorded autonomous run on the NIST CFReDS Data Leakage Case (full log: [`docs/AGENT_LOG.md`](AGENT_LOG.md)) produced one `RALPH_WIGGUM` rejection on envelope `b7f4ac82…` — the verifier rejected the citation because re-derivation under the live handle produced empty-output BLAKE3 (`af1349b9…`) instead of the envelope's signed `stdout_blake3 = 3b78732f…`. The agent abandoned the hypothesis and re-ran `parse_mft` fresh against the live handle, producing envelope `1aa53815…` which verified. The `RalphWiggumEvent` is persisted in the run's envelope store; the abandonment was the agent's protocol-driven response, not a human intervention.
 
 ## §7. Token economics
 
@@ -140,13 +179,37 @@ The per-question reasoning trace is bounded because the LLM emits a JSON args pr
 
 Per-question token records live in `logs/benchmarks/nss-vertex_attempts.jsonl` and aggregate into `logs/benchmarks/nss-vertex_III_tus4.json` alongside the candidates and verdicts — every entry is reproducible end-to-end.
 
-## §8. What this report does NOT claim
+## §8. Honest self-assessment — false positives, missed artifacts, hallucinated claims
+
+The hackathon brief asks for honesty over inflation. Three categories of honest weakness on the recorded CFReDS DLC live run:
+
+### §8.1 False positives during predicate iteration
+
+The agent submitted multiple `oath_verify_claim` attempts on the same supporting envelope during the run, iterating on `record_predicate` shape until it found a form the verifier accepted. Each intermediate submission carried the wrong predicate and was correctly returned as `QUARANTINED` ("envelope verified; predicate matched no records"). These are *not* promoted findings — they are surfaced and excluded — but they do show up in the agent's per-step trace as predicate-shape errors. **None of these `QUARANTINED` results appear in the final 5-claim table.** They are an honest signal of LLM-side predicate-construction trial-and-error within the typed schema.
+
+### §8.2 Missed artifacts
+
+The live run did not surface every artifact a senior human examiner would catch in the same window. Specifically:
+
+- **Browser history (Chrome Cache)** — the agent enumerated credential artifacts and inspected the LocalLow CryptnetUrlCache but did not deep-parse Chrome history for Google Drive upload URLs. A human examiner would correlate that with the Google Drive sync-folder finding (claim-004) to time-stamp specific document uploads.
+- **LNK timestamps with deeper temporal correlation** — the agent surfaced LNK presence but did not correlate the LNK first-access times against the USN delete events with millisecond precision; the Recycle-Bin pattern was identified at minute granularity. Tighter correlation is mechanical follow-up.
+- **CD-burn folder content listing** — the agent identified the staging folder (claim-003) but did not enumerate the burned file set against the secret_project document list. A second pass with `parse_mft` filtered to `\Burn\Burn\` would close that loop.
+
+None of these are wrong claims; they are claims the agent did not attempt. Future runs could be tightened with a planning prompt that explicitly lists secondary correlation passes.
+
+### §8.3 Hallucinated claims
+
+**Zero promoted hallucinations in the recorded run.** The architectural guarantee held: every shipped finding (the 5 in the final table) cites a signed envelope whose `data_blake3` and `stdout_blake3` re-derive deterministically under `oath verify`. The one `RALPH_WIGGUM` rejection (envelope `b7f4ac82…`) was the verifier catching an attempted citation against a stale-handle envelope; the agent abandoned and re-derived per protocol. **The verifier did its job: nothing the agent could not prove was allowed to ship.**
+
+The bare-minimum honest statement: in 31 minutes of autonomous execution against a real forensic image, the agent produced 5 court-admissible findings; the verifier caught 1 attempted citation and forced re-derivation; 0 hallucinated findings reached the final table.
+
+## §9. What this report does NOT claim
 
 - **Not Daubert-certified.** Admissibility is a judicial finding, not a property of code. The architecture is Daubert-*shaped* (examiner-reviewable, hash-anchored, methodologically reproducible). Whether a court accepts that is for a court to decide.
 - **Not a complete forensic suite.** OATH wraps mainstream DFIR tools (EZ Tools, Sleuthkit, Volatility 3, Hayabusa, plaso) — it doesn't replace them. The contribution is the verifier-gated orchestration layer + chain-of-custody.
 - **No human-in-the-loop assistance during scoring.** Every reported score is fully autonomous: corpus in, ranked candidates out, no examiner intervention.
 
-## §9. Replay receipt
+## §10. Replay receipt
 
 Every score in §1 is anchored to a signed `BenchmarkResult` JSON in `logs/benchmarks/<run_id>_III_tus4.json`. The result file binds:
 

@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif">
+  <defs>
+    <linearGradient id="bgtool" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0E1218"/>
+      <stop offset="1" stop-color="#121826"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="760" fill="url(#bgtool)"/>
+
+  <text x="600" y="48" text-anchor="middle" fill="#E8EEF5" font-size="24" font-weight="700">OATH Typed Tool Surface · 16 MCP Tools</text>
+  <text x="600" y="74" text-anchor="middle" fill="#6FD0C9" font-size="13" font-weight="500" letter-spacing="2">NO EXECUTE_SHELL · EVERY OUTPUT → SIGNED NOTARIZED&lt;T&gt;</text>
+
+  <!-- Forensic Wrappers column -->
+  <g transform="translate(60,120)">
+    <rect width="540" height="600" rx="12" fill="#161E2C" stroke="#6FD0C9" stroke-width="2"/>
+    <text x="270" y="38" text-anchor="middle" fill="#6FD0C9" font-size="16" font-weight="700">11 FORENSIC WRAPPERS</text>
+    <text x="270" y="60" text-anchor="middle" fill="#9AA6B4" font-size="11">each binds image_sha256 · args · stdout_blake3 · ed25519 sig</text>
+
+    <g font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="12">
+      <g transform="translate(30,100)">
+        <text fill="#6FD0C9" font-weight="700">parse_evtx</text>
+        <text x="220" fill="#9AA6B4">EvtxECmd · Windows event logs</text>
+      </g>
+      <g transform="translate(30,134)">
+        <text fill="#6FD0C9" font-weight="700">parse_mft</text>
+        <text x="220" fill="#9AA6B4">MFTECmd · NTFS $MFT entries</text>
+      </g>
+      <g transform="translate(30,168)">
+        <text fill="#6FD0C9" font-weight="700">parse_registry</text>
+        <text x="220" fill="#9AA6B4">RECmd · Windows registry hives</text>
+      </g>
+      <g transform="translate(30,202)">
+        <text fill="#6FD0C9" font-weight="700">parse_usnjrnl</text>
+        <text x="220" fill="#9AA6B4">MFTECmd $J · change journal</text>
+      </g>
+      <g transform="translate(30,236)">
+        <text fill="#6FD0C9" font-weight="700">parse_amcache</text>
+        <text x="220" fill="#9AA6B4">AmcacheParser · Amcache.hve</text>
+      </g>
+      <g transform="translate(30,270)">
+        <text fill="#6FD0C9" font-weight="700">parse_prefetch</text>
+        <text x="220" fill="#9AA6B4">PECmd · Prefetch run history</text>
+      </g>
+      <g transform="translate(30,304)">
+        <text fill="#6FD0C9" font-weight="700">run_hayabusa</text>
+        <text x="220" fill="#9AA6B4">Hayabusa · Sigma triage on EVTX</text>
+      </g>
+      <g transform="translate(30,338)">
+        <text fill="#6FD0C9" font-weight="700">plaso_supertimeline</text>
+        <text x="220" fill="#9AA6B4">plaso psort · cross-source timeline</text>
+      </g>
+      <g transform="translate(30,372)">
+        <text fill="#6FD0C9" font-weight="700">vol3_query</text>
+        <text x="220" fill="#9AA6B4">Volatility 3 · memory image plugins</text>
+      </g>
+      <g transform="translate(30,406)">
+        <text fill="#6FD0C9" font-weight="700">find_strings_on_image</text>
+        <text x="220" fill="#9AA6B4">Sleuthkit + scan · NIST String Search</text>
+      </g>
+      <g transform="translate(30,440)">
+        <text fill="#6FD0C9" font-weight="700">enumerate_credential_artifacts</text>
+        <text x="0" y="22" fill="#9AA6B4">DPAPI · NTDS · browser DBs · hibernation files · SSH keys</text>
+      </g>
+    </g>
+
+    <text x="270" y="540" text-anchor="middle" fill="#9AA6B4" font-size="11" font-style="italic">replay anchor: BLAKE3 of stdout · re-derived by</text>
+    <text x="270" y="558" text-anchor="middle" fill="#9AA6B4" font-size="11" font-style="italic">tool-specific reverify() at oath verify time</text>
+    <text x="270" y="580" text-anchor="middle" fill="#6FD0C9" font-size="11" font-weight="700">no execute_shell · no arbitrary code paths</text>
+  </g>
+
+  <!-- Control + Inspection column -->
+  <g transform="translate(620,120)">
+    <rect width="520" height="600" rx="12" fill="#161E2C" stroke="#5AB7E0" stroke-width="2"/>
+    <text x="260" y="38" text-anchor="middle" fill="#5AB7E0" font-size="16" font-weight="700">5 CONTROL · INSPECTION</text>
+    <text x="260" y="60" text-anchor="middle" fill="#9AA6B4" font-size="11">preserves the typed boundary across runs</text>
+
+    <g font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="12">
+      <g transform="translate(30,108)">
+        <text fill="#5AB7E0" font-weight="700">oath_mount</text>
+        <text x="200" fill="#9AA6B4">establishes read-only EvidenceHandle</text>
+        <text y="20" x="0" fill="#9AA6B4" font-size="11">streams image SHA-256 · mounts via ewfmount + ntfs-3g</text>
+      </g>
+      <g transform="translate(30,170)">
+        <text fill="#5AB7E0" font-weight="700">oath_list_handles</text>
+        <text x="200" fill="#9AA6B4">enumerates known handles</text>
+      </g>
+      <g transform="translate(30,210)">
+        <text fill="#5AB7E0" font-weight="700">oath_list_envelopes</text>
+        <text x="200" fill="#9AA6B4">enumerates signed chains</text>
+        <text y="20" x="0" fill="#9AA6B4" font-size="11">current run + read-only pre-staged chains under logs/</text>
+        <text y="40" x="0" fill="#9AA6B4" font-size="11">closes the "no way to inspect receipts without shell" gap</text>
+      </g>
+      <g transform="translate(30,290)">
+        <text fill="#5AB7E0" font-weight="700">oath_read_envelope</text>
+        <text x="200" fill="#9AA6B4">fetches one envelope payload</text>
+        <text y="20" x="0" fill="#9AA6B4" font-size="11">by content-addressed envelope_id</text>
+      </g>
+      <g transform="translate(30,350)">
+        <text fill="#5AB7E0" font-weight="700">oath_verify_claim</text>
+        <text x="200" fill="#9AA6B4">routes through Witness Oath Verifier</text>
+        <text y="20" x="0" fill="#9AA6B4" font-size="11">returns VERIFIED · QUARANTINED · RALPH_WIGGUM</text>
+      </g>
+    </g>
+
+    <line x1="30" y1="410" x2="490" y2="410" stroke="#2C3850" stroke-width="1.5"/>
+    <text x="30" y="438" fill="#6FD0C9" font-size="12" font-weight="700">DESIGN RATIONALE</text>
+    <text x="30" y="460" fill="#9AA6B4" font-size="11">Without oath_list_envelopes and oath_read_envelope an</text>
+    <text x="30" y="476" fill="#9AA6B4" font-size="11">agent has no way to look at pre-existing receipts other</text>
+    <text x="30" y="492" fill="#9AA6B4" font-size="11">than shelling out to JSONL files. Adding them to the</text>
+    <text x="30" y="508" fill="#9AA6B4" font-size="11">typed surface keeps the typed-tool boundary intact</text>
+    <text x="30" y="524" fill="#9AA6B4" font-size="11">across runs and across pre-staged evidence chains.</text>
+
+    <text x="30" y="556" fill="#5AB7E0" font-size="11" font-weight="700">verify_claim is the only path DRAFT → CONFIRMED</text>
+    <text x="30" y="574" fill="#9AA6B4" font-size="11">the LLM has no bypass</text>
+  </g>
+</svg>

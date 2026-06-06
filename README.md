@@ -1,10 +1,17 @@
-# OATH
+<p align="center">
+  <img src="docs/assets/oath-logo.png" alt="OATH" width="480"/>
+</p>
 
-Verifier-gated evidence receipts for LLM-assisted digital forensics.
+<h3 align="center">Verifier-gated evidence receipts for LLM-assisted digital forensics.</h3>
 
-[![PyPI](https://img.shields.io/pypi/v/oath-mcp.svg)](https://pypi.org/project/oath-mcp/)
-[![Python](https://img.shields.io/pypi/pyversions/oath-mcp.svg)](https://pypi.org/project/oath-mcp/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+<p align="center">
+  <a href="https://pypi.org/project/oath-mcp/"><img src="https://img.shields.io/pypi/v/oath-mcp.svg" alt="PyPI"/></a>
+  <a href="https://pypi.org/project/oath-mcp/"><img src="https://img.shields.io/pypi/pyversions/oath-mcp.svg" alt="Python"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"/></a>
+  <a href="https://osf.io/rk73m/"><img src="https://img.shields.io/badge/preprint-OSF-1ABC9C.svg" alt="Preprint on OSF"/></a>
+</p>
+
+---
 
 OATH is a published Model Context Protocol server that makes LLM-assisted
 forensic claims replayable. It separates what an LLM proposes from what the
@@ -108,6 +115,10 @@ questions in the local harness and a four-candidate answer budget.
 | OATH deterministic baseline, no LLM | 78.43% |
 | OATH live agent with verifier | 92.75% |
 
+<p align="center">
+  <img src="docs/assets/benchmark-comparison.png" alt="DFIR-Metric Module III benchmark comparison" width="720"/>
+</p>
+
 The architectural result matters more than the model headline: typed tool
 invocation plus deterministic replay removes a large class of free-form
 script-generation failures before any model-specific capability is counted.
@@ -116,26 +127,43 @@ Full methodology and audit notes are in [docs/ACCURACY.md](docs/ACCURACY.md).
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    IMG["Evidence image"] --> HANDLE["Read-only EvidenceHandle"]
-    HANDLE --> TOOLS["Typed forensic tools"]
-    TOOLS --> ENV["Signed Notarized<T> envelope"]
-    LLM["LLM proposes typed arguments and claims"] --> TOOLS
-    LLM --> CLAIM["Claim cites envelope_id"]
-    CLAIM --> VERIFY{"Witness Oath Verifier"}
-    ENV --> VERIFY
-    VERIFY -->|receipt replays + predicate matches| OK["VERIFIED"]
-    VERIFY -->|receipt intact, predicate missing| Q["QUARANTINED"]
-    VERIFY -->|hash/signature/data drift| R["RALPH_WIGGUM"]
-    R --> LLM
-```
+OATH is a **Custom MCP Server** (approach #2 in the Find Evil! taxonomy).
+The agent's tool surface is 16 typed MCP tools; every tool output is wrapped
+in a signed `Notarized<T>` envelope; every LLM-emitted claim passes the
+Witness Oath Verifier.
 
-OATH uses a typed MCP-style tool surface rather than an arbitrary shell. The
-LLM can propose arguments and hypotheses; it cannot promote its own findings.
-Promotion is reserved for the deterministic verifier.
+<p align="center">
+  <img src="docs/assets/architecture-diagram.png" alt="OATH architecture diagram" width="100%"/>
+</p>
+
+The LLM can propose arguments and hypotheses; it cannot promote its own
+findings. Promotion is reserved for the deterministic verifier.
 
 Detailed trust-boundary notes are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Full-resolution diagrams (architecture, envelope anatomy, self-correction
+loop, benchmark, tool surface) live in [`docs/assets/`](docs/assets/).
+
+### Tool surface
+
+<p align="center">
+  <img src="docs/assets/tool-surface.png" alt="OATH typed tool surface" width="100%"/>
+</p>
+
+### Self-correction loop
+
+When the verifier rejects a citation, the agent abandons the hypothesis and
+re-derives the cited evidence fresh — a `RalphWiggumEvent` is persisted in
+the run's envelope store as audit-side proof.
+
+<p align="center">
+  <img src="docs/assets/self-correction-flow.png" alt="RALPH_WIGGUM self-correction loop" width="100%"/>
+</p>
+
+### Notarized&lt;T&gt; envelope anatomy
+
+<p align="center">
+  <img src="docs/assets/notarized-envelope.png" alt="Notarized<T> signed envelope anatomy" width="100%"/>
+</p>
 
 ## Repository Map
 
@@ -157,10 +185,12 @@ making LLM-assisted forensic claims auditable.
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
-- [Accuracy and benchmark notes](docs/ACCURACY.md)
+- [Accuracy report](docs/ACCURACY.md) — benchmark methodology + honest self-assessment + evidence-integrity approach
+- [Agent execution log](docs/AGENT_LOG.md) — structured tool-execution sequence from the recorded autonomous run
 - [Dataset documentation](docs/DATASETS.md)
 - [Try-it-out instructions](docs/TRY_IT_OUT.md)
 - [Publication and citation notes](docs/PUBLICATION.md)
+- Visuals: [`docs/assets/`](docs/assets/) — architecture, envelope anatomy, self-correction loop, benchmark, tool surface (SVG + PDF + PNG)
 - Preprint: [osf.io/rk73m](https://osf.io/rk73m/)
 - Package: [pypi.org/project/oath-mcp](https://pypi.org/project/oath-mcp/)
 

@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 720" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif">
+  <defs>
+    <linearGradient id="bgflow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0E1218"/>
+      <stop offset="1" stop-color="#121826"/>
+    </linearGradient>
+    <marker id="arrFlow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6FD0C9"/>
+    </marker>
+    <marker id="arrFail" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#E47AA5"/>
+    </marker>
+    <marker id="arrLoop" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#D5B84D"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="720" fill="url(#bgflow)"/>
+
+  <text x="600" y="48" text-anchor="middle" fill="#E8EEF5" font-size="24" font-weight="700">Self-Correction · RALPH_WIGGUM Verdict Loop</text>
+  <text x="600" y="74" text-anchor="middle" fill="#6FD0C9" font-size="13" font-weight="500" letter-spacing="2">CRYPTOGRAPHIC REJECTION FORCES VISIBLE RE-DERIVATION</text>
+
+  <!-- Step 1: LLM proposes -->
+  <g transform="translate(80,140)">
+    <rect width="240" height="100" rx="12" fill="#1B2230" stroke="#2C3850" stroke-width="1.5"/>
+    <text x="120" y="32" text-anchor="middle" fill="#E8EEF5" font-size="14" font-weight="600">1 · LLM proposes</text>
+    <text x="120" y="56" text-anchor="middle" fill="#9AA6B4" font-size="11">AgentClaim with</text>
+    <text x="120" y="74" text-anchor="middle" fill="#D5DAE2" font-size="11" font-family="ui-monospace, 'SF Mono', Menlo, monospace">envelope_id + record_predicate</text>
+  </g>
+
+  <!-- Arrow 1 → 2 -->
+  <line x1="320" y1="190" x2="380" y2="190" stroke="#6FD0C9" stroke-width="2" marker-end="url(#arrFlow)"/>
+
+  <!-- Step 2: Verifier checks -->
+  <g transform="translate(380,140)">
+    <rect width="280" height="100" rx="12" fill="#1B2230" stroke="#5AB7E0" stroke-width="2"/>
+    <text x="140" y="32" text-anchor="middle" fill="#5AB7E0" font-size="14" font-weight="700">2 · Witness Oath Verifier</text>
+    <text x="140" y="54" text-anchor="middle" fill="#9AA6B4" font-size="11">ed25519 sig · data_blake3</text>
+    <text x="140" y="72" text-anchor="middle" fill="#9AA6B4" font-size="11">reverify() · predicate match</text>
+  </g>
+
+  <!-- Arrow 2 → 3 (verdict) -->
+  <line x1="660" y1="190" x2="720" y2="190" stroke="#6FD0C9" stroke-width="2" marker-end="url(#arrFlow)"/>
+
+  <!-- Step 3: Verdict aggregator -->
+  <g transform="translate(720,140)">
+    <rect width="200" height="100" rx="12" fill="#15212F" stroke="#5AB7E0" stroke-width="1.5"/>
+    <text x="100" y="34" text-anchor="middle" fill="#5AB7E0" font-size="14" font-weight="700">3 · Verdict</text>
+    <text x="100" y="58" text-anchor="middle" fill="#9AA6B4" font-size="11">aggregate per claim</text>
+    <text x="100" y="76" text-anchor="middle" fill="#D5DAE2" font-size="11" font-family="ui-monospace, 'SF Mono', Menlo, monospace">three terminal states</text>
+  </g>
+
+  <!-- Three verdict outputs -->
+  <g transform="translate(80,310)">
+    <rect width="300" height="110" rx="10" fill="#1B3025" stroke="#4EC58F" stroke-width="2"/>
+    <text x="150" y="34" text-anchor="middle" fill="#4EC58F" font-size="15" font-weight="700">VERIFIED</text>
+    <text x="150" y="56" text-anchor="middle" fill="#9AA6B4" font-size="11">all envelopes reverify · predicate matches ≥1 record</text>
+    <text x="150" y="84" text-anchor="middle" fill="#D5DAE2" font-size="12">claim ships with replay receipt</text>
+  </g>
+
+  <g transform="translate(440,310)">
+    <rect width="300" height="110" rx="10" fill="#2E2D1B" stroke="#D5B84D" stroke-width="2"/>
+    <text x="150" y="34" text-anchor="middle" fill="#D5B84D" font-size="15" font-weight="700">QUARANTINED</text>
+    <text x="150" y="56" text-anchor="middle" fill="#9AA6B4" font-size="11">envelopes reverify · predicate matches 0 records</text>
+    <text x="150" y="84" text-anchor="middle" fill="#D5DAE2" font-size="12">surfaced to examiner · never promoted</text>
+  </g>
+
+  <g transform="translate(800,310)">
+    <rect width="300" height="110" rx="10" fill="#321820" stroke="#E47AA5" stroke-width="2"/>
+    <text x="150" y="34" text-anchor="middle" fill="#E47AA5" font-size="15" font-weight="700">RALPH_WIGGUM</text>
+    <text x="150" y="56" text-anchor="middle" fill="#9AA6B4" font-size="11">signature fail · data_blake3 mismatch · re-derive fail</text>
+    <text x="150" y="84" text-anchor="middle" fill="#D5DAE2" font-size="12">forces visible abandonment</text>
+  </g>
+
+  <!-- Verdict arrows from step 3 -->
+  <line x1="800" y1="245" x2="230" y2="308" stroke="#4EC58F" stroke-width="2" marker-end="url(#arrFlow)"/>
+  <line x1="820" y1="245" x2="590" y2="308" stroke="#D5B84D" stroke-width="2" marker-end="url(#arrLoop)"/>
+  <line x1="850" y1="245" x2="950" y2="308" stroke="#E47AA5" stroke-width="2" marker-end="url(#arrFail)"/>
+
+  <!-- 4 · Self-correction event -->
+  <g transform="translate(800,470)">
+    <rect width="300" height="170" rx="10" fill="#1B2230" stroke="#E47AA5" stroke-width="2"/>
+    <text x="150" y="32" text-anchor="middle" fill="#E47AA5" font-size="14" font-weight="700">4 · RalphWiggumEvent</text>
+    <text x="150" y="52" text-anchor="middle" fill="#9AA6B4" font-size="11">structured persisted event</text>
+    <g font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="11" fill="#D5DAE2">
+      <text x="20" y="80">abandoned_claim_id: ...</text>
+      <text x="20" y="98">abandonment_reason: ...</text>
+      <text x="20" y="116">revision_constraint: ...</text>
+      <text x="20" y="134">narrative: ...</text>
+    </g>
+    <text x="150" y="158" text-anchor="middle" fill="#9AA6B4" font-size="11" font-style="italic">verifier-generated, not LLM-narrated</text>
+  </g>
+
+  <line x1="950" y1="420" x2="950" y2="466" stroke="#E47AA5" stroke-width="2" marker-end="url(#arrFail)"/>
+
+  <!-- Loop back to LLM -->
+  <path d="M 800 555 Q 500 555 200 555 Q 100 555 100 380 Q 100 248 200 215" fill="none" stroke="#D5B84D" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrLoop)"/>
+  <text x="440" y="580" fill="#D5B84D" font-size="12" font-weight="600">5 · LLM re-proposes under derived revision_constraint (never the same envelope)</text>
+
+  <!-- Footer key -->
+  <g transform="translate(60,660)">
+    <text fill="#9AA6B4" font-size="11">The loop terminates on VERIFIED or QUARANTINED. RALPH_WIGGUM is bounded — repeated failures with no progress promote to examiner review.</text>
+    <text y="22" fill="#9AA6B4" font-size="11">Live demo: envelope b7f4ac82… was rejected and the agent re-derived fresh per protocol within the 31-min CFReDS run.</text>
+  </g>
+</svg>
