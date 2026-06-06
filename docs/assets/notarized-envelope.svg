@@ -1,107 +1,107 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 820" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#0E1218"/>
       <stop offset="1" stop-color="#121826"/>
     </linearGradient>
   </defs>
-  <rect width="1200" height="760" fill="url(#bg)"/>
+  <rect width="1400" height="820" fill="url(#bg)"/>
 
-  <text x="600" y="48" text-anchor="middle" fill="#E8EEF5" font-size="24" font-weight="700">Notarized&lt;T&gt; · Anatomy of a Signed Receipt</text>
-  <text x="600" y="74" text-anchor="middle" fill="#6FD0C9" font-size="13" font-weight="500" letter-spacing="2">ED25519 + BLAKE3 + RFC 8785 JCS</text>
+  <text x="700" y="50" text-anchor="middle" fill="#E8EEF5" font-size="24" font-weight="700">Notarized&lt;T&gt; · Anatomy of a Signed Receipt</text>
+  <text x="700" y="76" text-anchor="middle" fill="#6FD0C9" font-size="13" font-weight="500" letter-spacing="2">ED25519 + BLAKE3 + RFC 8785 JCS</text>
 
   <!-- Outer envelope -->
-  <rect x="200" y="120" width="800" height="540" rx="14" fill="#161E2C" stroke="#6FD0C9" stroke-width="2"/>
+  <rect x="80" y="120" width="1240" height="600" rx="14" fill="#161E2C" stroke="#6FD0C9" stroke-width="2"/>
 
   <!-- Header section -->
-  <rect x="220" y="148" width="760" height="430" rx="10" fill="#1B2230" stroke="#2C3850" stroke-width="1.5"/>
-  <text x="240" y="178" fill="#5AB7E0" font-size="13" font-weight="700" letter-spacing="2">NOTARIZED HEADER · signed under ed25519</text>
+  <rect x="100" y="148" width="1200" height="470" rx="10" fill="#1B2230" stroke="#2C3850" stroke-width="1.5"/>
+  <text x="120" y="180" fill="#5AB7E0" font-size="14" font-weight="700" letter-spacing="2">NOTARIZED HEADER · signed under ed25519</text>
 
-  <!-- Fields -->
-  <g font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="12">
-    <g transform="translate(240,210)">
-      <text fill="#6FD0C9">image_sha256</text>
-      <text x="180" fill="#D5DAE2">"e6365e44f1004252...a956a9"</text>
-      <text x="540" fill="#9AA6B4">streamed SHA-256 of the source evidence image</text>
+  <!-- Fields layout: label x=0, value x=240, description x=600 (relative to translate origin x=120) -->
+  <g font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="13">
+    <g transform="translate(120,212)">
+      <text fill="#6FD0C9" font-weight="600">image_sha256</text>
+      <text x="240" fill="#D5DAE2">"e6365e44...a956a9"</text>
+      <text x="600" fill="#9AA6B4">SHA-256 of the source evidence image</text>
     </g>
-    <g transform="translate(240,236)">
-      <text fill="#6FD0C9">tool_name</text>
-      <text x="180" fill="#D5DAE2">"parse_evtx"</text>
-      <text x="540" fill="#9AA6B4">typed forensic wrapper invoked</text>
+    <g transform="translate(120,240)">
+      <text fill="#6FD0C9" font-weight="600">tool_name</text>
+      <text x="240" fill="#D5DAE2">"parse_evtx"</text>
+      <text x="600" fill="#9AA6B4">typed forensic wrapper invoked</text>
     </g>
-    <g transform="translate(240,262)">
-      <text fill="#6FD0C9">tool_version</text>
-      <text x="180" fill="#D5DAE2">"EvtxECmd 2026.5.0"</text>
-      <text x="540" fill="#9AA6B4">pinned upstream binary version</text>
+    <g transform="translate(120,268)">
+      <text fill="#6FD0C9" font-weight="600">tool_version</text>
+      <text x="240" fill="#D5DAE2">"EvtxECmd 2026.5.0"</text>
+      <text x="600" fill="#9AA6B4">pinned upstream binary version</text>
     </g>
-    <g transform="translate(240,288)">
-      <text fill="#6FD0C9">args_canonical</text>
-      <text x="180" fill="#D5DAE2">"{...}"</text>
-      <text x="540" fill="#9AA6B4">RFC 8785 JCS — sorted keys, UTF-8, no whitespace</text>
+    <g transform="translate(120,296)">
+      <text fill="#6FD0C9" font-weight="600">args_canonical</text>
+      <text x="240" fill="#D5DAE2">"{...}"</text>
+      <text x="600" fill="#9AA6B4">RFC 8785 JCS — sorted, UTF-8, no whitespace</text>
     </g>
-    <g transform="translate(240,314)">
-      <text fill="#6FD0C9">stdout_blake3</text>
-      <text x="180" fill="#D5DAE2">"3b78732f...e9b1"</text>
-      <text x="540" fill="#9AA6B4">BLAKE3 of raw tool output bytes — replay anchor</text>
+    <g transform="translate(120,324)">
+      <text fill="#6FD0C9" font-weight="600">stdout_blake3</text>
+      <text x="240" fill="#D5DAE2">"3b78732f...e9b1"</text>
+      <text x="600" fill="#9AA6B4">BLAKE3 of raw tool output — replay anchor</text>
     </g>
-    <g transform="translate(240,340)">
-      <text fill="#6FD0C9">data_blake3</text>
-      <text x="180" fill="#D5DAE2">"c4a8e91d...0f72"</text>
-      <text x="540" fill="#9AA6B4">BLAKE3 of canonical typed data — persisted-tamper detector</text>
+    <g transform="translate(120,352)">
+      <text fill="#6FD0C9" font-weight="600">data_blake3</text>
+      <text x="240" fill="#D5DAE2">"c4a8e91d...0f72"</text>
+      <text x="600" fill="#9AA6B4">BLAKE3 of canonical data — tamper detector</text>
     </g>
-    <g transform="translate(240,366)">
-      <text fill="#6FD0C9">offsets</text>
-      <text x="180" fill="#D5DAE2">[[0,12288],[12288,24576]]</text>
-      <text x="540" fill="#9AA6B4">source-image byte spans backing the typed records</text>
+    <g transform="translate(120,380)">
+      <text fill="#6FD0C9" font-weight="600">offsets</text>
+      <text x="240" fill="#D5DAE2">[[0,12288],[12288,24576]]</text>
+      <text x="600" fill="#9AA6B4">image byte spans backing typed records</text>
     </g>
-    <g transform="translate(240,392)">
-      <text fill="#6FD0C9">ts</text>
-      <text x="180" fill="#D5DAE2">1780430134.118</text>
-      <text x="540" fill="#9AA6B4">monotonic mint timestamp</text>
+    <g transform="translate(120,408)">
+      <text fill="#6FD0C9" font-weight="600">ts</text>
+      <text x="240" fill="#D5DAE2">1780430134.118</text>
+      <text x="600" fill="#9AA6B4">monotonic mint timestamp</text>
     </g>
-    <g transform="translate(240,418)">
-      <text fill="#6FD0C9">prev</text>
-      <text x="180" fill="#D5DAE2">"7a9c10f6...8a3b"</text>
-      <text x="540" fill="#9AA6B4">BLAKE3 of previous signed header — chain link</text>
+    <g transform="translate(120,436)">
+      <text fill="#6FD0C9" font-weight="600">prev</text>
+      <text x="240" fill="#D5DAE2">"7a9c10f6...8a3b"</text>
+      <text x="600" fill="#9AA6B4">BLAKE3 of previous signed header — chain link</text>
     </g>
-    <g transform="translate(240,444)">
-      <text fill="#6FD0C9">run_id</text>
-      <text x="180" fill="#D5DAE2">"4f6d31e0..."</text>
-      <text x="540" fill="#9AA6B4">UUID for the current agent run</text>
+    <g transform="translate(120,464)">
+      <text fill="#6FD0C9" font-weight="600">run_id</text>
+      <text x="240" fill="#D5DAE2">"4f6d31e0..."</text>
+      <text x="600" fill="#9AA6B4">UUID for the current agent run</text>
     </g>
-    <g transform="translate(240,470)">
+    <g transform="translate(120,492)">
       <text fill="#D5B84D" font-weight="700">model_id</text>
-      <text x="180" fill="#D5DAE2">"gemini-3-flash-preview" | null</text>
-      <text x="540" fill="#D5B84D">DAUBERT BINDING — which model</text>
+      <text x="240" fill="#D5DAE2">"gemini-3-flash-preview" | null</text>
+      <text x="600" fill="#D5B84D">DAUBERT BINDING — which model</text>
     </g>
-    <g transform="translate(240,496)">
+    <g transform="translate(120,520)">
       <text fill="#D5B84D" font-weight="700">prompt_hash</text>
-      <text x="180" fill="#D5DAE2">"8b30f...c712" | null</text>
-      <text x="540" fill="#D5B84D">DAUBERT BINDING — from what prompt (BLAKE3 of S || U with len-prefixes)</text>
+      <text x="240" fill="#D5DAE2">"8b30f...c712" | null</text>
+      <text x="600" fill="#D5B84D">DAUBERT BINDING — from what prompt</text>
     </g>
   </g>
 
   <!-- separator -->
-  <line x1="240" y1="528" x2="960" y2="528" stroke="#2C3850" stroke-width="1.5"/>
+  <line x1="120" y1="552" x2="1280" y2="552" stroke="#2C3850" stroke-width="1.5"/>
 
-  <text x="240" y="558" fill="#5AB7E0" font-size="13" font-weight="700" letter-spacing="2">DATA &amp; SIGNATURE</text>
-  <g font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="12">
-    <g transform="translate(240,580)">
-      <text fill="#6FD0C9">data</text>
-      <text x="180" fill="#D5DAE2">List[T] · typed Pydantic records</text>
+  <text x="120" y="582" fill="#5AB7E0" font-size="14" font-weight="700" letter-spacing="2">DATA &amp; SIGNATURE</text>
+  <g font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="13">
+    <g transform="translate(120,604)">
+      <text fill="#6FD0C9" font-weight="600">data</text>
+      <text x="240" fill="#D5DAE2">List[T] · typed Pydantic records</text>
     </g>
-    <g transform="translate(240,602)">
-      <text fill="#6FD0C9">sig</text>
-      <text x="180" fill="#D5DAE2">ed25519(canonicalize(header))</text>
-      <text x="540" fill="#9AA6B4">base64url Ed25519 over canonical header</text>
+    <g transform="translate(120,628)">
+      <text fill="#6FD0C9" font-weight="600">sig</text>
+      <text x="240" fill="#D5DAE2">ed25519(canonicalize(header))</text>
+      <text x="600" fill="#9AA6B4">base64url Ed25519 over canonical header</text>
     </g>
   </g>
 
   <!-- envelope_id reveal -->
-  <g transform="translate(280,690)">
-    <rect width="640" height="50" rx="8" fill="#15212F" stroke="#5AB7E0" stroke-width="1.5"/>
-    <text x="20" y="22" fill="#5AB7E0" font-size="12" font-weight="700">envelope_id =</text>
-    <text x="150" y="22" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="12" fill="#D5DAE2">BLAKE3(canonical_header_bytes)</text>
-    <text x="20" y="40" fill="#9AA6B4" font-size="11">Content-addressed — cited by claims, never collides with mutable row indices</text>
+  <g transform="translate(280,740)">
+    <rect width="840" height="58" rx="8" fill="#15212F" stroke="#5AB7E0" stroke-width="1.5"/>
+    <text x="22" y="24" fill="#5AB7E0" font-size="13" font-weight="700">envelope_id =</text>
+    <text x="170" y="24" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="13" fill="#D5DAE2">BLAKE3(canonical_header_bytes)</text>
+    <text x="22" y="46" fill="#9AA6B4" font-size="11">Content-addressed — cited by claims, never collides with mutable row indices</text>
   </g>
 </svg>

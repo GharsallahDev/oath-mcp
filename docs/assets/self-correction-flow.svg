@@ -94,10 +94,11 @@
 
   <!-- Loop back to LLM -->
   <path d="M 800 555 Q 500 555 200 555 Q 100 555 100 380 Q 100 248 200 215" fill="none" stroke="#D5B84D" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrLoop)"/>
-  <text x="440" y="580" fill="#D5B84D" font-size="12" font-weight="600">5 · LLM re-proposes under derived revision_constraint (never the same envelope)</text>
+  <text x="60" y="600" fill="#D5B84D" font-size="12" font-weight="600">5 · LLM re-proposes under derived revision_constraint</text>
+  <text x="60" y="618" fill="#9AA6B4" font-size="11">(never the same envelope)</text>
 
   <!-- Footer key -->
-  <g transform="translate(60,660)">
+  <g transform="translate(60,665)">
     <text fill="#9AA6B4" font-size="11">The loop terminates on VERIFIED or QUARANTINED. RALPH_WIGGUM is bounded — repeated failures with no progress promote to examiner review.</text>
     <text y="22" fill="#9AA6B4" font-size="11">Live demo: envelope b7f4ac82… was rejected and the agent re-derived fresh per protocol within the 31-min CFReDS run.</text>
   </g>
