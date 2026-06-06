@@ -52,7 +52,13 @@ import mcp.types as types
 
 from oath import __version__
 from oath.mcp.evidence_handle import open_handle
-from oath.mcp.persistence import EnvelopeStore, load_handle, save_handle
+from oath.mcp.persistence import (
+    EnvelopeStore,
+    list_envelopes_anywhere,
+    load_handle,
+    read_envelope_anywhere,
+    save_handle,
+)
 from oath.mcp.tools import (
     enumerate_credential_artifacts,
     find_strings_on_image,
@@ -132,6 +138,39 @@ def _build_tool_descriptors() -> list[types.Tool]:
             name="oath_list_handles",
             description="List known EvidenceHandle IDs in the current run's logs directory.",
             inputSchema={"type": "object", "properties": {}},
+        ),
+        types.Tool(
+            name="oath_list_envelopes",
+            description=(
+                "List every signed Notarized envelope visible under the OATH "
+                "logs directory. Spans the current agent run plus any read-"
+                "only pre-staged chains (logs/sample-run/, logs/demo-run/, "
+                "etc.). Each record carries envelope_id, scope, tool_name, "
+                "tool_version, image_sha256 prefix, row_count, prev-link. "
+                "Use this BEFORE citing any envelope_id in a claim; replaces "
+                "any need to inspect logs/ via shell."
+            ),
+            inputSchema={"type": "object", "properties": {}},
+        ),
+        types.Tool(
+            name="oath_read_envelope",
+            description=(
+                "Read a specific Notarized envelope by envelope_id. Searches "
+                "every store under logs/ (current run + pre-staged chains). "
+                "Returns the full envelope payload (header + data + sig) so "
+                "the agent can inspect the signed record fields before "
+                "constructing a claim. Use after oath_list_envelopes."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "envelope_id": {
+                        "type": "string",
+                        "description": "The 64-hex envelope_id from oath_list_envelopes.",
+                    }
+                },
+                "required": ["envelope_id"],
+            },
         ),
         types.Tool(
             name="parse_evtx",
@@ -497,6 +536,14 @@ def _dispatch_tool_inner(
         ids = sorted(p.stem for p in server.handles_dir.glob("*.json"))
         return {"handle_ids": ids}
 
+    if name == "oath_list_envelopes":
+        records = list_envelopes_anywhere(server.logs_dir)
+        return {"count": len(records), "envelopes": records}
+
+    if name == "oath_read_envelope":
+        envelope_id = arguments["envelope_id"]
+        return read_envelope_anywhere(server.logs_dir, envelope_id)
+
     # ----- typed function tools -----
     if name == "parse_evtx":
         handle = server.get_handle(arguments["handle_id"])
@@ -655,16 +702,26 @@ def _dispatch_tool_inner(
 
     # ----- Witness Oath verification -----
     if name == "oath_verify_claim":
+        from oath.receipt.notarized import Notarized
         claim_obj = arguments["claim"]
         # Reconstruct AgentClaim from a dict the LLM sent.
         claim = AgentClaim.model_validate(claim_obj)
-        # Load all envelopes the claim references.
+        # Load all envelopes the claim references. Try the current run's
+        # writable EnvelopeStore first (fast path); fall through to any
+        # read-only pre-staged store under logs/ so claims that cite
+        # demo-run / sample-run envelopes can be verified the same way.
         envelopes_by_id = {}
         for evidence in claim.supporting_evidence:
             try:
                 envelopes_by_id[evidence.envelope_id] = server.envelope_store.load(
                     evidence.envelope_id
                 )
+                continue
+            except KeyError:
+                pass
+            try:
+                raw = read_envelope_anywhere(server.logs_dir, evidence.envelope_id)
+                envelopes_by_id[evidence.envelope_id] = Notarized(**raw)
             except KeyError:
                 pass  # the verifier will report this as unknown envelope
         reverify_kwargs = {

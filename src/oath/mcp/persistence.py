@@ -174,8 +174,122 @@ class EnvelopeStore:
         return len(self._index)
 
 
+# --------------------------------------------------------------------------- #
+# Cross-store discovery (read-only views over pre-staged envelope chains)     #
+# --------------------------------------------------------------------------- #
+
+
+def discover_envelope_stores(logs_dir: Path) -> list[tuple[str, Path, Path]]:
+    """Return (scope, jsonl_path, index_path) for every envelope store under logs_dir.
+
+    The canonical writeable store lives at logs/envelopes/<run_id>.jsonl. Read-
+    only views are accepted from any other subdirectory directly under logs/
+    (e.g., logs/sample-run/, logs/demo-run/) — used by oath_list_envelopes /
+    oath_read_envelope so the agent can enumerate pre-staged chains via typed
+    tools rather than shelling out.
+    """
+    stores: list[tuple[str, Path, Path]] = []
+    envelopes_dir = logs_dir / "envelopes"
+    if envelopes_dir.exists():
+        for jsonl in sorted(envelopes_dir.glob("*.jsonl")):
+            stores.append((jsonl.stem, jsonl, jsonl.with_suffix(".index")))
+    if logs_dir.exists():
+        for subdir in sorted(logs_dir.iterdir()):
+            if not subdir.is_dir() or subdir.name in ("envelopes", "handles", "benchmarks", "receipts"):
+                continue
+            for jsonl in sorted(subdir.glob("*.jsonl")):
+                stores.append((subdir.name, jsonl, jsonl.with_suffix(".index")))
+    return stores
+
+
+def _summarize_store(scope: str, jsonl: Path, index: Path) -> list[dict[str, Any]]:
+    """Walk the .index and return a small summary record per envelope."""
+    out: list[dict[str, Any]] = []
+    if not jsonl.exists() or not index.exists():
+        return out
+    try:
+        idx_lines = index.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return out
+    with jsonl.open("rb") as f:
+        for line in idx_lines:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                eid, off_str = line.split("\t", 1)
+                offset = int(off_str)
+            except ValueError:
+                continue
+            try:
+                f.seek(offset)
+                raw = f.readline().decode("utf-8")
+                env = json.loads(raw)
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                continue
+            header = env.get("header", {}) or {}
+            data = env.get("data")
+            image_sha = header.get("image_sha256", "") or ""
+            out.append({
+                "envelope_id": eid,
+                "scope": scope,
+                "tool_name": header.get("tool_name", "?"),
+                "tool_version": header.get("tool_version", "?"),
+                "image_sha256_prefix": image_sha[:16] + "..." if image_sha else "",
+                "stdout_blake3_prefix": (header.get("stdout_blake3", "") or "")[:16],
+                "row_count": len(data) if isinstance(data, list) else (1 if data is not None else 0),
+                "prev": header.get("prev", None),
+            })
+    return out
+
+
+def list_envelopes_anywhere(logs_dir: Path) -> list[dict[str, Any]]:
+    """Return summary records for every envelope in every store under logs_dir."""
+    out: list[dict[str, Any]] = []
+    for scope, jsonl, index in discover_envelope_stores(logs_dir):
+        out.extend(_summarize_store(scope, jsonl, index))
+    return out
+
+
+def read_envelope_anywhere(logs_dir: Path, envelope_id: str) -> dict[str, Any]:
+    """Find and return the full envelope payload (header + data + sig) by ID.
+
+    Searches every store under logs_dir. Raises KeyError if no store contains
+    the requested envelope_id.
+    """
+    for _scope, jsonl, index in discover_envelope_stores(logs_dir):
+        if not jsonl.exists() or not index.exists():
+            continue
+        try:
+            idx_lines = index.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        with jsonl.open("rb") as f:
+            for line in idx_lines:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    eid, off_str = line.split("\t", 1)
+                    offset = int(off_str)
+                except ValueError:
+                    continue
+                if eid != envelope_id:
+                    continue
+                try:
+                    f.seek(offset)
+                    raw = f.readline().decode("utf-8")
+                    return json.loads(raw)
+                except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                    continue
+    raise KeyError(f"envelope_id not found in any store under {logs_dir}: {envelope_id}")
+
+
 __all__ = [
     "EnvelopeStore",
+    "discover_envelope_stores",
+    "list_envelopes_anywhere",
     "load_handle",
+    "read_envelope_anywhere",
     "save_handle",
 ]

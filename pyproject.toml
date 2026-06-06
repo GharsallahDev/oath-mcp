@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "oath-mcp"
-version = "0.1.2"
+version = "0.1.3"
 description = "OATH — typed MCP server + verifier-gated evidence receipts for LLM-assisted digital forensics."
 readme = "README.md"
 license = { text = "MIT" }
