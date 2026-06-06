@@ -22,19 +22,35 @@ We didn't want to make a better LLM. We wanted to make an architecture where **t
 
 ## What it does
 
-OATH is an autonomous DFIR agent that **extends Protocol SIFT** with three architectural primitives Protocol SIFT does not ship. Both install scripts (`scripts/install-tools.sh` and `scripts/install-on-sift.sh`) call Protocol SIFT's own installer first (`curl -fsSL https://raw.githubusercontent.com/teamdfir/protocol-sift/main/install.sh | bash`) to drop the baseline (Claude Code + five DFIR skill packs + PDF reporter) under `~/.claude/`, then install OATH on top.
+OATH is an autonomous DFIR agent that **extends Protocol SIFT** with three architectural primitives Protocol SIFT does not ship. Install OATH alongside the Protocol SIFT baseline with one canonical Model Context Protocol command:
 
-OATH is also a **Custom MCP Server** (architectural approach #2 in the Find Evil! taxonomy, called out in the rules as "the most sound architecture in the evaluation"). The agent's tool surface is **11 typed forensic functions** — no `execute_shell`, no arbitrary code paths. Every tool output is wrapped in a signed `Notarized<T>` envelope. Every LLM-emitted claim passes the **Witness Oath Verifier**, which re-runs the cited tool and confirms the BLAKE3 of stdout matches the signed receipt. Mismatch → the claim is **quarantined** (visible to the examiner, never promoted to a finding). Drift → the **Ralph Wiggum Loop** forces visible re-proposal under a derived constraint. Every shipped finding ships with a one-line replay command (`oath verify <envelope-id>`) that an examiner can run on any laptop in under a minute.
+```
+claude mcp add --transport stdio oath -- uvx oath-mcp
+```
+
+That single line pulls the published `oath-mcp` package from PyPI, isolates it via `uv`, and registers it as a stdio MCP server with Claude Code. Same shape as Airtable, Sentry, or any other published MCP server in the Claude Code documentation.
+
+OATH is also a **Custom MCP Server** (architectural approach #2 in the Find Evil! taxonomy, called out in the rules as "the most sound architecture in the evaluation"). The agent's tool surface is **11 typed forensic functions plus 5 control-plane and inspection tools — 16 typed MCP tools total**. No `execute_shell`, no arbitrary code paths. Every forensic tool output is wrapped in a signed `Notarized<T>` envelope. Every LLM-emitted claim passes the **Witness Oath Verifier**, which re-runs the cited tool and confirms the BLAKE3 of stdout matches the signed receipt. Mismatch → claim is **QUARANTINED** (visible to the examiner, never promoted to a finding). Drift → the verifier returns **`RALPH_WIGGUM`**, forcing visible re-proposal under a derived constraint. Every shipped finding ships with a one-line replay command (`oath verify <envelope-id>`) that an examiner can run on any laptop in under a minute.
 
 The result on the only public benchmark in this space (DFIR-Metric Module III, NIST String Search, 510 questions): **92.75% TUS@4 vs the paper's GPT-4.1 baseline of 38.5%**. Same corpus, same image, same scoring rule. The deterministic baseline (no LLM at all) scores **78.43%** — meaning the architectural lift alone is worth ~40 points before the LLM proposes anything.
 
-Real evidence end-to-end works against the NIST CFReDS Data Leakage Case (Win7 NTFS, 2.15 GB E01): the suspect "informant" (RID 1000) is surfaced by `parse_registry` from the real SAM hive; their email `iaman.informant@nist.gov` shows up in `parse_usnjrnl` deletions of Outlook OST temp files; Hayabusa flags `T1098` (admin-group additions) on 2015-03-22 and `T1543.003` (service persistence) on the leak day — the actual attack chain visible without a human deciding what to look at.
+Real evidence end-to-end works against the **NIST CFReDS Data Leakage Case** (Win7 NTFS, 2.15 GB E01). In a 31-minute autonomous live run, the agent produced **5 court-admissible findings**, each citing a signed envelope, recovering the complete insider exfiltration chain:
+
+1. **Network share access** — `\\10.11.11.128\secured_drive` in MountPoints2 (parse_registry, NTUSER:informant)
+2. **Removable media** — two SanDisk USB serial numbers, last write 2015-03-23 18:31:09 (parse_registry, SYSTEM hive Enum\USB)
+3. **Cloud exfiltration channel** — Google Drive sync folder created 2015-03-23 20:05:32 (parse_registry)
+4. **Confidential file access** — Recent LNK records for `(secret_project)_pricing_decision.xlsx` and `[secret_project]_final_meeting.pptx` (parse_mft, $MFT)
+5. **Anti-forensic cleanup** — bulk `FileDelete` of 17 secret_project documents and their LNK traces (parse_usnjrnl, $UsnJrnl:$J)
+
+The agent's protocol log captures one `RALPH_WIGGUM` rejection on envelope `b7f4ac82…` during the run — the verifier rejected a citation, the agent abandoned the hypothesis and re-derived fresh per protocol. That is the self-correction beat the architecture is designed to make visible.
 
 ---
 
 ## How we built it
 
-**Pattern:** Custom MCP Server. The agent's tool surface is 11 typed Python functions, each wrapping a standard forensic tool:
+**Pattern:** Custom MCP Server. The agent's tool surface is 16 typed MCP tools — 11 forensic wrappers plus 5 control-plane and inspection tools.
+
+**11 forensic wrappers**, each binding a standard forensic tool into a signed `Notarized<T>` envelope:
 
 - `parse_evtx` (EvtxECmd) · `parse_mft` (MFTECmd) · `parse_registry` (RECmd batch-plugin)
 - `parse_usnjrnl` (MFTECmd $J mode) · `parse_prefetch` (PECmd) · `parse_amcache` (AmcacheParser)
@@ -42,6 +58,14 @@ Real evidence end-to-end works against the NIST CFReDS Data Leakage Case (Win7 N
 - `vol3_query` (Volatility 3 plugin invocation) · `plaso_supertimeline` (psort over a pre-built .plaso store)
 - `find_strings_on_image` (Sleuthkit fls + icat + multi-encoding byte-level scan — the NIST String Search surface)
 - `enumerate_credential_artifacts` (pure-Python FS inventory)
+
+**5 control-plane and inspection tools** that preserve the typed boundary across runs:
+
+- `oath_mount` (establishes a read-only `EvidenceHandle`, streams the image SHA-256)
+- `oath_list_handles` · `oath_list_envelopes` (enumerates signed envelope chains under the logs root, including read-only pre-staged chains) · `oath_read_envelope` (fetches a specific envelope payload by content-addressed ID)
+- `oath_verify_claim` (routes an `AgentClaim` through the Witness Oath Verifier)
+
+The two inspection tools (`oath_list_envelopes`, `oath_read_envelope`) close a real architectural gap: without them an agent had no way to read pre-existing signed receipts other than shelling out to JSONL files. Adding them to the typed surface keeps the typed-tool boundary intact across runs and across pre-staged evidence chains.
 
 Every call returns `Notarized<T>` — a Pydantic-typed envelope binding:
 
@@ -55,7 +79,7 @@ Every call returns `Notarized<T>` — a Pydantic-typed envelope binding:
 
 The **Witness Oath Verifier** consumes `AgentClaim` objects (LLM-emitted findings that cite envelopes by ID), re-runs every cited tool's `reverify()` callable, and confirms the BLAKE3 of stdout matches the signed value. Predicate-mismatch → QUARANTINED. Envelope drift → RALPH_WIGGUM. The verifier is the only path from DRAFT to CONFIRMED — the LLM has no bypass.
 
-The **LLM layer** is Vertex Gemini 3 Flash (with 3.1 Pro and 2.5 Flash benchmarked alongside for cross-tier comparison — see `docs/ACCURACY.md`). We don't ask it to write code (that's GPT-4.1's failure mode in the paper). We constrain it to emit a structured JSON object specifying the search arguments — image, partition, pattern, filter — and a deterministic executor runs the actual search under the verifier. The LLM-vs-deterministic comparison in our accuracy report is exactly this knob: turn the LLM off and we still score 78.43%, because the architecture is doing the heavy lifting. Transient Vertex API errors (429 quota, timeouts) trigger indefinite retry-with-backoff — never silent fallback to deterministic, which would corrupt the score.
+The **LLM layer** has two configurations. For the benchmark numbers reported below, the model is **Vertex Gemini 3 Flash** (with 3.1 Pro and 2.5 Flash benchmarked alongside for cross-tier comparison — see `docs/ACCURACY.md`). For the live recorded demo, the operator-facing agent is **Claude Code (Opus 4.8)** calling the 16 typed OATH tools through MCP. In either configuration, the model never executes forensic code. It proposes a structured JSON argument vector; a deterministic Python executor runs the actual search under the verifier. The LLM-vs-deterministic comparison in our accuracy report is exactly this knob: turn the LLM off and we still score 78.43%, because the architecture is doing the heavy lifting. Transient hosted-model API errors (429 quota, timeouts) trigger indefinite retry-with-backoff — never silent fallback to deterministic, which would corrupt the score.
 
 **Replay receipts.** Every envelope is committed to `logs/envelopes/<run_id>.jsonl` with a sidecar index. `oath verify <envelope-id>` re-runs the bound tool with the same args, recomputes BLAKE3-of-stdout, and confirms match. Pure Python, ~3 seconds per envelope. No LLM, no API key, no MCP server boot.
 
@@ -83,9 +107,9 @@ The Find Evil! brief lists six things judges score on. Most submissions in this 
 
 - **`oath verify` replay receipts.** Every shipped finding ships with a one-line command that re-derives the supporting evidence from the original-image SHA-256 on an examiner's commodity laptop in under 3 s. No LLM. No API key. No MCP server boot. Pure Python recompute against the signed receipt. *What cannot replay does not exist.*
 
-- **A public-benchmark score against a peer-reviewed paper.** We score **92.75% TUS@4** on DFIR-Metric Module III (NIST String Search), the only published LLM-DFIR benchmark (arXiv:2505.19973). The paper's GPT-4.1 baseline is 38.5%. Our deterministic-baseline-without-an-LLM scores 78.43% — *beating GPT-4.1 by ~40 points with no LLM at all*. On the harder non-empty-answer subset (227 questions where the system must actually find files), the live agent scores 83.70% vs 51.54% deterministic. The benchmark is fully reproducible from a fresh clone; the corpus SHA-256 is bound into every result file. Full methodology + audit trail: arXiv-style preprint published at [Zenodo DOI 10.5281/zenodo.20549726](https://doi.org/10.5281/zenodo.20549726).
+- **A public-benchmark score against a peer-reviewed paper.** We score **92.75% TUS@4** on DFIR-Metric Module III (NIST String Search), the only published LLM-DFIR benchmark (arXiv:2505.19973). The paper's GPT-4.1 baseline is 38.5%. Our deterministic-baseline-without-an-LLM scores 78.43% — *beating GPT-4.1 by ~40 points with no LLM at all*. On the harder non-empty-answer subset (227 questions where the system must actually find files), the live agent scores 83.70% vs 51.54% deterministic. The benchmark is reproducible from the published `oath-mcp` package; the corpus SHA-256 is bound into every result file.
 
-- **A real, persisted self-correction trace.** [`logs/self-correction-demo/`](logs/self-correction-demo/manifest.md) contains a real Ralph Wiggum cycle generated by the production verifier on intentionally-tampered evidence — a `data_blake3` mismatch fires the abandonment, the agent re-proposes citing a clean envelope, the verifier returns VERIFIED. Re-runnable in 2 seconds via `python scripts/show_self_correction.py`. Not a narrated demo — actual signed envelopes, actual verifier verdicts.
+- **Real self-correction on the recorded demo.** The 31-minute autonomous live run on the NIST CFReDS Data Leakage Case produced a real **`RALPH_WIGGUM` verdict on envelope `b7f4ac82…`** — the verifier rejected a citation mid-investigation, the agent abandoned the hypothesis and re-derived the underlying evidence fresh per protocol. The same code path is independently exercised in the 14-test spoliation suite (`tests/integration/test_spoliation.py`), which proves the verifier catches single-bit image mutation, persisted-data tampering, signature tampering, and chain-of-custody breaks end-to-end. Not a narrated demo — actual signed envelopes, actual verifier verdicts.
 
 ---
 
@@ -97,9 +121,7 @@ The Find Evil! brief lists six things judges score on. Most submissions in this 
 
 - **Real evidence end-to-end.** Every typed function has been smoke-tested against the NIST CFReDS Data Leakage Case (Win7 NTFS, 2.15 GB E01). The suspect, the deleted Outlook OST temp files containing his email, the admin-group-add events on the day before the leak, the service persistence on the leak day — all surfaced from the image bytes, all signed.
 
-- **Two install paths, both tested.** `scripts/install-tools.sh` for macOS Apple Silicon (with the plaso-via-Docker workaround), `scripts/install-on-sift.sh` for the SANS SIFT Workstation (native plaso, no Docker shim needed). Both produce identical Notarized envelope behavior — same image SHA-256 in, same BLAKE3 out.
-
-- **A Receipt Explorer web UI** at `/web/`, deployable to Cloudflare Pages or GitHub Pages, that lets anyone click through real signed envelopes from our DLC run and see exactly what `oath verify` would re-derive.
+- **Canonical MCP install via PyPI.** `claude mcp add --transport stdio oath -- uvx oath-mcp` — same one-line shape as Airtable, Sentry, or any other published MCP server in the Claude Code documentation. The published `oath-mcp` package on PyPI is versioned, isolated by `uv`, and works identically on the SIFT Workstation and on a developer laptop. No clone-and-run, no bespoke install script.
 
 ---
 
@@ -129,16 +151,15 @@ The Find Evil! brief lists six things judges score on. Most submissions in this 
 
 ## Built with
 
-`python` · `pydantic` · `mcp` · `cryptography` · `pynacl` (ed25519) · `blake3` · `volatility3` · `plaso` · `sleuthkit` · `EZ Tools` · `Hayabusa` · `Vertex AI` (Gemini 3 Flash + 3.1 Pro) · `rich` · `click` · `colima` (for plaso amd64 shim)
+`python` · `pydantic` · `mcp` (Model Context Protocol Python SDK) · `cryptography` · `pynacl` (ed25519) · `blake3` · `volatility3` · `plaso` · `sleuthkit` · `EZ Tools` · `Hayabusa` · `uv` (for `uvx oath-mcp` distribution) · `Vertex AI` (Gemini 3 Flash + 3.1 Pro — benchmark configuration) · `Claude Code` (Opus 4.8 — live demo configuration) · `rich` · `click` · `PyPI` (package distribution)
 
 ---
 
 ## Try it out
 
-- **Preprint:** [Zenodo DOI 10.5281/zenodo.20549726](https://doi.org/10.5281/zenodo.20549726) — full paper with methodology, threat model, related-work comparison against sigstore-a2a / Merkleon / Clampd / AEGIS, and per-model token economics
-- **Verifier artifact (Zenodo-archived release):** [Zenodo DOI 10.5281/zenodo.20549626](https://doi.org/10.5281/zenodo.20549626) — citable software release of the receipt + verifier code with `CITATION.cff` for automatic citation
-- **Live URL (Receipt Explorer):** deployed at submission via `wrangler pages deploy ./web` — pure static SPA over the bundled CFReDS signed envelopes; meanwhile `cd web && python3 -m http.server 8765` runs it locally with byte-identical data
-- **Repo:** https://github.com/GharsallahDev/oath
-- **Reproduce the benchmark numbers:** see [`docs/ACCURACY.md`](docs/ACCURACY.md) §2 — one-liner clone-to-result
-- **Try-It-Out walkthrough:** [`docs/TRY_IT_OUT.md`](docs/TRY_IT_OUT.md) — works on macOS native AND SIFT Workstation
-- **Self-correction artifact:** [`logs/self-correction-demo/manifest.md`](logs/self-correction-demo/manifest.md) — persisted RalphWiggumEvent + outcome from a real verifier run, re-runnable in 2 seconds via `python scripts/show_self_correction.py`
+- **One-line install (canonical):** `claude mcp add --transport stdio oath -- uvx oath-mcp`
+- **Published package:** [oath-mcp on PyPI](https://pypi.org/project/oath-mcp/) — versioned, isolated by `uv`, identical behavior on SIFT Workstation and on a developer laptop
+- **Preprint:** [OSF project — OATH](https://osf.io/rk73m/) — full paper with methodology, threat model, related-work comparison against sigstore-a2a / AEGIS / Attested Tool-Server Admission / NeMo Guardrails, and per-model token economics
+- **Reproduce the benchmark numbers:** see [`docs/ACCURACY.md`](docs/ACCURACY.md) §2
+- **Try-It-Out walkthrough:** [`docs/TRY_IT_OUT.md`](docs/TRY_IT_OUT.md) — works on SIFT Workstation and on a developer laptop
+- **Self-correction code path:** the verifier-rejection logic is exercised by `tests/integration/test_spoliation.py` (14 named tests) and was hit live during the recorded demo on the NIST CFReDS Data Leakage Case (envelope `b7f4ac82…` rejected with `RALPH_WIGGUM`, agent re-derived fresh per protocol)
