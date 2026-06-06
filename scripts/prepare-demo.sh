@@ -63,8 +63,25 @@ for line in lines:
     if env["header"]["tool_name"] == "run_hayabusa" and tampered_eid is None:
         # Inject a fabricated record. data_blake3 in the (untouched) header
         # will no longer match canonical(data), so the verifier rejects.
-        if isinstance(env.get("data"), list) and env["data"]:
-            fabricated = dict(env["data"][0])
+        if isinstance(env.get("data"), list):
+            if env["data"]:
+                # Clone the shape of an existing record so the fabrication
+                # passes any schema-level filtering the agent might apply.
+                fabricated = dict(env["data"][0])
+            else:
+                # Original Hayabusa run found no hits on this image — fall
+                # back to a schema-correct synthetic record. This keeps the
+                # Ralph Wiggum trigger reliable regardless of detection yield.
+                fabricated = {
+                    "Timestamp": "2015-03-22 19:30:14.000 +00:00",
+                    "RuleTitle": "FABRICATED — demo tamper marker",
+                    "Level": "high",
+                    "Computer": "FORENSICS-PC",
+                    "Channel": "Security",
+                    "EventID": 4732,
+                    "MitreTactics": ["T1098"],
+                    "Details": {"target_user": "informant"},
+                }
             fabricated["__demo_tamper__"] = "fabricated-for-self-correction-demo"
             fabricated["rule_title"] = "FABRICATED — demo tamper marker"
             env["data"].append(fabricated)
