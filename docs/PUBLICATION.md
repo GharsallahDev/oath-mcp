@@ -1,44 +1,44 @@
 # Publication
 
-OATH has two public Zenodo records: the paper and the verifier artifact.
+The implementation and the accompanying preprint are published as follows.
 
 ## Records
 
-| Record | DOI | Type |
+| Record | Location | Type |
 |---|---|---|
-| OATH: Notarized Evidence Envelopes for LLM-Assisted Forensic Claims | [10.5281/zenodo.20549726](https://doi.org/10.5281/zenodo.20549726) | Preprint |
-| OATH verifier artifact v0.1.0 | [10.5281/zenodo.20549626](https://doi.org/10.5281/zenodo.20549626) | Software artifact |
+| OATH: Verifier-Gated Evidence Receipts for LLM-Assisted Digital Forensics | [osf.io/rk73m](https://osf.io/rk73m/) | Preprint |
+| `oath-mcp` (Python MCP server, version 0.1.3) | [pypi.org/project/oath-mcp](https://pypi.org/project/oath-mcp/) | Published package |
 
-The preprint record is supplemented by the software artifact record.
+The preprint is the canonical write-up of the receipt protocol and the
+benchmark numbers. The published package is the canonical distribution of the
+implementation; install with `claude mcp add --transport stdio oath -- uvx oath-mcp`.
 
 ## Citation
 
 ```bibtex
 @misc{gharsallah2026oath,
   author       = {Malek Gharsallah},
-  title        = {{OATH}: Notarized Evidence Envelopes for LLM-Assisted Forensic Claims},
+  title        = {{OATH}: Verifier-Gated Evidence Receipts for LLM-Assisted Digital Forensics},
   year         = {2026},
   month        = jun,
-  publisher    = {Zenodo},
-  doi          = {10.5281/zenodo.20549726},
-  url          = {https://doi.org/10.5281/zenodo.20549726}
+  howpublished = {Open Science Framework},
+  url          = {https://osf.io/rk73m/}
 }
 
-@misc{gharsallah2026oathartifact,
+@misc{oathmcppackage2026,
   author       = {Malek Gharsallah},
-  title        = {{OATH} verifier artifact v0.1.0},
+  title        = {{oath-mcp}: Published MCP server for OATH},
   year         = {2026},
   month        = jun,
-  publisher    = {Zenodo},
-  version      = {v0.1.0},
-  doi          = {10.5281/zenodo.20549626},
-  url          = {https://doi.org/10.5281/zenodo.20549626}
+  howpublished = {Python Package Index},
+  url          = {https://pypi.org/project/oath-mcp/},
+  note         = {Install via \texttt{claude mcp add --transport stdio oath -- uvx oath-mcp}}
 }
 ```
 
 ## Release Boundary
 
-The public artifact is verifier-focused. It contains the material needed to
+The published package is verifier-focused. It contains the material needed to
 inspect the receipt and verifier design, but not private case data, signing
-secrets, API keys, hosted-model credentials, sensitive prompts, benchmark corpus
-images, or private benchmark notes.
+secrets, API keys, hosted-model credentials, sensitive prompts, benchmark
+corpus images, or private benchmark notes.

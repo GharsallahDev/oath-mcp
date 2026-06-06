@@ -1,48 +1,48 @@
-# OATH Verifier Artifact
+# OATH Published Implementation
 
-This document describes the public artifact boundary for OATH.
+This document describes the public release boundary for OATH.
 
-The verifier artifact is published on Zenodo:
+The implementation is published as a Python MCP server on the Python Package
+Index:
 
-- DOI: [10.5281/zenodo.20549626](https://doi.org/10.5281/zenodo.20549626)
-- Version: `v0.1.0`
-- Related preprint: [10.5281/zenodo.20549726](https://doi.org/10.5281/zenodo.20549726)
+- Package: [`oath-mcp` on PyPI](https://pypi.org/project/oath-mcp/)
+- Current version: `0.1.3`
+- Canonical install: `claude mcp add --transport stdio oath -- uvx oath-mcp`
+- Companion preprint: [osf.io/rk73m](https://osf.io/rk73m/)
 
-The artifact release is intentionally verifier-focused. It contains the material
-needed to inspect and exercise the receipt design without exposing private case
-data, signing secrets, API keys, or operational prompts.
+The release is intentionally verifier-focused. It contains the material
+needed to inspect and exercise the receipt design without exposing private
+case data, signing secrets, API keys, or operational prompts.
 
 ## Included
 
 - `Notarized<T>` schema and signing implementation
-- canonicalization and prompt-hash helpers
-- verifier and claim-predicate code
-- spoliation and Daubert-binding tests
-- synthetic self-correction demo
-- signed sample envelopes and expected verifier outcomes
-- installation metadata needed to run the tests
+- Canonicalization (RFC 8785 JCS) and prompt-hash helpers
+- Witness Oath Verifier and claim-predicate code
+- 11 typed forensic-tool wrappers and 5 control-plane / inspection tools
+- Spoliation and Daubert-binding tests (14 named tests)
+- Scripted self-correction artifact
+- Signed sample envelopes and expected verifier outcomes
 
 ## Not Included
 
-- private signing keys
-- real customer or sensitive case data
+- Private signing keys
+- Real customer or sensitive case data
 - API keys or cloud credentials
-- private benchmark notes
-- prompts containing sensitive operational strategy
-- destructive or arbitrary-shell tool surfaces
+- Private benchmark notes
+- Prompts containing sensitive operational strategy
+- Destructive or arbitrary-shell tool surfaces
 
 ## Minimal Reproduction
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install -e ".[dev]"
+pip install oath-mcp[dev]
 
-PYTHONPATH=src python -m pytest tests/integration/test_spoliation.py -q
-PYTHONPATH=src python scripts/show_self_correction.py
+python -m pytest --pyargs oath.tests.integration.test_spoliation -q
+python -m oath.scripts.show_self_correction
 ```
 
-The first command block exercises signature binding, data-hash integrity,
-prompt/model binding, and replay-failure classification. The second replays the
-persisted self-correction artifact and emits the verifier-driven abandonment
-event.
+The first command exercises signature binding, data-hash integrity,
+prompt/model binding, and replay-failure classification. The second replays
+the scripted self-correction artifact and emits the verifier-driven
+abandonment event.

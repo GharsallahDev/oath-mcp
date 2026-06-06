@@ -2,68 +2,100 @@
 
 Verifier-gated evidence receipts for LLM-assisted digital forensics.
 
-[![Preprint DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20549726.svg)](https://doi.org/10.5281/zenodo.20549726)
-[![Artifact DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20549626.svg)](https://doi.org/10.5281/zenodo.20549626)
+[![PyPI](https://img.shields.io/pypi/v/oath-mcp.svg)](https://pypi.org/project/oath-mcp/)
+[![Python](https://img.shields.io/pypi/pyversions/oath-mcp.svg)](https://pypi.org/project/oath-mcp/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-OATH is a research prototype for making forensic claims replayable. It separates
-what an LLM proposes from what the evidence proves: forensic tools produce signed
-`Notarized<T>` envelopes, and the Witness Oath Verifier promotes only claims that
-can be deterministically re-derived from the original evidence bytes.
+OATH is a published Model Context Protocol server that makes LLM-assisted
+forensic claims replayable. It separates what an LLM proposes from what the
+evidence proves: forensic tools produce signed `Notarized<T>` envelopes, and
+the Witness Oath Verifier promotes only claims that can be deterministically
+re-derived from the original evidence bytes.
 
-This repository supports the published preprint:
+The preprint accompanying this implementation is hosted on OSF:
+[osf.io/rk73m](https://osf.io/rk73m/).
 
-> **OATH: Notarized Evidence Envelopes for LLM-Assisted Forensic Claims**
-> Zenodo DOI: [10.5281/zenodo.20549726](https://doi.org/10.5281/zenodo.20549726)
+## Quick Start
 
-The verifier artifact is archived separately at
-[10.5281/zenodo.20549626](https://doi.org/10.5281/zenodo.20549626).
+One canonical Model Context Protocol command installs OATH alongside the
+Protocol SIFT baseline on a SANS SIFT Workstation:
+
+```bash
+# 1. Protocol SIFT baseline (Claude Code + 5 DFIR skill packs)
+curl -fsSL https://raw.githubusercontent.com/teamdfir/protocol-sift/main/install.sh | bash
+
+# 2. Forensic-binary bootstrap (.NET 9, EZ Tools, Hayabusa — what SIFT lacks)
+curl -fsSL https://raw.githubusercontent.com/GharsallahDev/oath-mcp/main/scripts/bootstrap-forensic-tools.sh | bash
+exec bash
+
+# 3. uv (if not already installed)
+curl -LsSf https://astral.sh/uv/install.sh | sh && exec bash
+
+# 4. Wire OATH into Claude Code — the canonical one-liner
+claude mcp add --transport stdio oath -- uvx oath-mcp
+```
+
+Start a session and confirm the 16 typed tools are connected:
+
+```bash
+claude
+# inside Claude:
+/mcp        # → oath: connected · 16 tools
+```
+
+The same one-line install works in any MCP-compatible runtime. The published
+`oath-mcp` package on PyPI is versioned, isolated by `uv`, and behaves
+identically on the SIFT Workstation and on a developer laptop.
+
+To use the operator CLI (`oath mount`, `oath verify`) instead of driving via
+Claude Code, install the package as a tool:
+
+```bash
+uv tool install oath-mcp
+oath mount path/to/evidence.E01
+oath verify <envelope-id>
+```
+
+Full forensic-workstation setup, including the macOS Apple Silicon UTM
+emulation path and a non-SIFT Docker path, is documented in
+[docs/TRY_IT_OUT.md](docs/TRY_IT_OUT.md).
 
 ## Relationship to Protocol SIFT
 
 OATH extends [Protocol SIFT](https://github.com/teamdfir/protocol-sift) — the
 open-source autonomous-DFIR baseline (Claude Code + five DFIR skill packs +
-PDF reporter, installed under `~/.claude/`). Protocol SIFT provides the agent
-framework; OATH layers a typed MCP-server tool surface, `Notarized<T>`
-envelopes, and a verifier-gated promotion path on top. Both install scripts
-(`scripts/install-tools.sh`, `scripts/install-on-sift.sh`) call Protocol SIFT's
-own installer first, then install OATH. See
+PDF reporter, installed under `~/.claude/`). Protocol SIFT provides the
+agent framework; OATH layers a typed 16-tool MCP server, `Notarized<T>`
+envelopes, and a verifier-gated promotion path on top. The Quick Start above
+installs Protocol SIFT first, then OATH on top. See
 [docs/ARCHITECTURE.md §"How OATH extends Protocol SIFT"](docs/ARCHITECTURE.md#how-oath-extends-protocol-sift)
 for the architectural diff.
-
-If you already have Protocol SIFT installed (Claude Code present at
-`~/.claude/CLAUDE.md` and the five skill packs at `~/.claude/skills/`), set
-`OATH_SKIP_PROTOCOL_SIFT=1` before running either install script to skip the
-baseline step:
-
-```bash
-OATH_SKIP_PROTOCOL_SIFT=1 bash scripts/install-on-sift.sh
-```
 
 ## Core Idea
 
 LLM-assisted investigation fails dangerously when a fluent model summary is
 treated as evidence. OATH treats that as a systems problem. A finding is not
-accepted because the model said it; it is accepted only when it cites a signed
-receipt whose contents replay.
+accepted because the model said it; it is accepted only when it cites a
+signed receipt whose contents replay.
 
 Each `Notarized<T>` envelope binds:
 
-- original evidence hash
-- typed tool name and version
-- canonical tool arguments
-- raw tool-output hash
-- parsed-data hash
-- supporting byte offsets when available
-- model identifier and prompt hash when an LLM contributed
-- previous-envelope hash for tamper-evident sequencing
+- Original evidence SHA-256
+- Typed tool name and pinned version
+- Canonical tool arguments (RFC 8785 JCS)
+- Raw tool-output BLAKE3
+- Parsed-data BLAKE3 (`data_blake3`)
+- Supporting byte offsets when available
+- Model identifier and prompt hash when an LLM contributed
+- Previous-envelope hash for tamper-evident sequencing
 - Ed25519 signature over the signed header
 
-The verifier then classifies claims as:
+The verifier classifies claims as:
 
 - `VERIFIED`: the receipt and predicate replay successfully
 - `QUARANTINED`: the receipt is intact, but the cited claim is not supported
-- `RALPH_WIGGUM`: evidence drift or receipt tampering is detected, forcing visible
-  abandonment and re-proposal
+- `RALPH_WIGGUM`: evidence drift or receipt tampering is detected, forcing
+  visible abandonment and re-proposal
 
 ## Results
 
@@ -82,71 +114,6 @@ script-generation failures before any model-specific capability is counted.
 
 Full methodology and audit notes are in [docs/ACCURACY.md](docs/ACCURACY.md).
 
-## Artifact Release
-
-A verifier-focused artifact release is archived on Zenodo:
-
-- Artifact: [OATH verifier artifact v0.1.0](https://doi.org/10.5281/zenodo.20549626)
-- Preprint: [OATH: Notarized Evidence Envelopes for LLM-Assisted Forensic Claims](https://doi.org/10.5281/zenodo.20549726)
-
-The release is intended to let an independent reviewer answer the narrow
-question: does the receipt, signature, canonicalization, replay, and
-self-correction design work? It does not include private case data, signing
-secrets, API keys, or operational prompts.
-
-## Quick Start
-
-OATH is published as a Python MCP server. Four one-liners on a SANS SIFT
-Workstation get you from cold boot to "Claude Code is driving 13 typed
-forensic tools against your evidence":
-
-```bash
-# 1. Protocol SIFT baseline (Claude Code + DFIR skill packs)
-curl -fsSL https://raw.githubusercontent.com/teamdfir/protocol-sift/main/install.sh | bash
-
-# 2. Forensic-binary bootstrap (.NET 9, EZ Tools, Hayabusa — what SIFT lacks)
-curl -fsSL https://raw.githubusercontent.com/GharsallahDev/oath-mcp/main/scripts/bootstrap-forensic-tools.sh | bash
-exec bash    # pick up the new PATH
-
-# 3. uv (if not already installed)
-curl -LsSf https://astral.sh/uv/install.sh | sh && exec bash
-
-# 4. Wire OATH into Claude Code (this is what goes on screen in the demo)
-claude mcp add --transport stdio oath -- uvx oath-mcp
-```
-
-Then start a session and confirm the 13 typed tools are connected:
-
-```bash
-claude
-# inside Claude:
-/mcp        # → oath: connected · 13 tools
-```
-
-To use the operator CLI (`oath mount`, `oath verify`, `oath demo`) instead
-of driving via Claude Code, install the package as a tool:
-
-```bash
-uv tool install oath-mcp
-oath mount path/to/evidence.E01
-oath verify <envelope-id>
-```
-
-Full forensic workstation setup, including the longer-form
-`install-on-sift.sh` alternative and a non-SIFT Docker path, is documented
-in [docs/TRY_IT_OUT.md](docs/TRY_IT_OUT.md).
-
-### Developing locally
-
-For working on `src/oath/`:
-
-```bash
-git clone https://github.com/GharsallahDev/oath-mcp-mcp
-cd oath-mcp
-uv venv && uv pip install -e ".[dev]"
-PYTHONPATH=src python -m pytest tests/integration/test_spoliation.py -q
-```
-
 ## Architecture
 
 ```mermaid
@@ -164,9 +131,9 @@ flowchart LR
     R --> LLM
 ```
 
-OATH uses a custom MCP-style tool surface with typed functions rather than an
-arbitrary shell. The LLM can propose arguments and hypotheses; it cannot promote
-its own findings. Promotion is reserved for the deterministic verifier.
+OATH uses a typed MCP-style tool surface rather than an arbitrary shell. The
+LLM can propose arguments and hypotheses; it cannot promote its own findings.
+Promotion is reserved for the deterministic verifier.
 
 Detailed trust-boundary notes are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -179,24 +146,23 @@ Detailed trust-boundary notes are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md
 | `src/oath/witness/` | Verifier, claim predicates, self-correction events |
 | `src/oath/benchmark/` | DFIR-Metric harness and scoring utilities |
 | `tests/integration/test_spoliation.py` | Spoliation, data-integrity, chain, and Daubert-binding tests |
-| `logs/self-correction-demo/` | Re-runnable self-correction artifact |
-| `web/` | Static receipt explorer for signed sample envelopes |
 
 ## What OATH Does Not Claim
 
-OATH does not prove legal admissibility, certify tool correctness, make wrappers
-honest by magic, prove general DFIR competence, or remove the need for examiner
-review. It provides a concrete receipt and verifier pattern for making
-LLM-assisted forensic claims auditable.
+OATH does not prove legal admissibility, certify tool correctness, make
+wrappers honest by magic, prove general DFIR competence, or remove the need
+for examiner review. It provides a concrete receipt and verifier pattern for
+making LLM-assisted forensic claims auditable.
 
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
-- [Artifact release notes](docs/ARTIFACT.md)
-- [Publication and citation notes](docs/PUBLICATION.md)
 - [Accuracy and benchmark notes](docs/ACCURACY.md)
 - [Dataset documentation](docs/DATASETS.md)
 - [Try-it-out instructions](docs/TRY_IT_OUT.md)
+- [Publication and citation notes](docs/PUBLICATION.md)
+- Preprint: [osf.io/rk73m](https://osf.io/rk73m/)
+- Package: [pypi.org/project/oath-mcp](https://pypi.org/project/oath-mcp/)
 
 ## License
 

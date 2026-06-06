@@ -146,7 +146,7 @@ Run the exact lines you're about to record, cold:
 ```bash
 claude mcp add --transport stdio oath -- uvx oath-mcp
 claude mcp list                # should show: oath  stdio   ✓ connected
-claude                          # then: /mcp → 'oath: connected · 13 tools' → Ctrl+D
+claude                          # then: /mcp → 'oath: connected · 16 tools' → Ctrl+D
 ```
 
 If anything fails, **fix it now**, don't record. Then remove the
@@ -189,7 +189,7 @@ Type, deliberately:
 cat /etc/os-release | grep PRETTY
 ```
 
-**Voiceover:** *"This is the SANS SIFT Workstation. Ubuntu 22 dot 04."*
+**Voiceover:** *"This is the SANS SIFT Workstation. Ubuntu 24 dot 04."*
 
 Pause 1s, then type:
 
@@ -246,7 +246,7 @@ When Claude's prompt appears, type:
 /mcp
 ```
 
-The output shows `oath: connected · 13 tools`.
+The output shows `oath: connected · 16 tools`.
 
 **Voiceover:** *"Thirteen typed forensic functions. No execute shell.
 The model can only call signed, schema-validated tools."*
@@ -356,7 +356,7 @@ Close the browser. Voice only:
 
 *"OATH MCP. Autonomous DFIR with a court-admissible chain of custody.
 One line installs it. github dot com slash GharsallahDev slash oath dash
-mcp. Zenodo DOI in the description."*
+mcp. preprint in the description."*
 
 Stop recording.
 
@@ -416,8 +416,8 @@ Architecture: Custom MCP Server (approach #2 in the Find Evil! taxonomy)
 Witness Oath Verifier) layered on top.
 
 Repository: https://github.com/GharsallahDev/oath-mcp
-Preprint:   https://doi.org/10.5281/zenodo.20549726
-Artifact:   https://doi.org/10.5281/zenodo.20549626
+Preprint:   https://osf.io/rk73m/
+Artifact:   https://pypi.org/project/oath-mcp/
 ```
 
 5. Copy the unlisted URL.
@@ -510,7 +510,7 @@ If it doesn't, append to your prompt:
 
 1. **Custom MCP Server (Approach #2)** is visibly the running architecture
    — judges see the canonical `claude mcp add ... -- uvx oath-mcp` install
-   line, then 13 typed tools in Claude's palette, and no shell.
+   line, then 16 typed tools in Claude's palette, and no shell.
 2. **Direct Agent Extension (Approach #1)** features layer on top — Ralph
    Wiggum loop + verifier validation.
 3. **Real self-correction** — the `data_blake3` rejection is the real

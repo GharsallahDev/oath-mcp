@@ -15,19 +15,36 @@ For the hosted live-agent mode (optional), you'll additionally need:
 - **gcloud CLI** with an authenticated project (`gcloud auth application-default login`)
 - The required hosted-model API enabled for the authenticated project
 
-## 2. One-shot install
+## 2. One-shot install (canonical)
+
+The canonical install is the published Python MCP server. One line wires it
+into Claude Code:
 
 ```bash
-git clone https://github.com/GharsallahDev/oath-mcp && cd oath
+claude mcp add --transport stdio oath -- uvx oath-mcp
+```
+
+That single command pulls the `oath-mcp` package from PyPI, isolates it via
+`uv`, and registers it as a stdio MCP server. Identical behavior on the SIFT
+Workstation and on a developer Mac. Confirm the 16 typed tools are connected
+with `claude` → `/mcp`.
+
+### Long-form alternative (full-control install scripts)
+
+If you want the pinned forensic-tool versions and a self-contained source
+checkout — for benchmark reproduction, contribution work, or air-gapped
+deployment — use the longer-form scripts. Both call Protocol SIFT's
+installer first, then layer OATH on top:
+
+```bash
+git clone https://github.com/GharsallahDev/oath-mcp && cd oath-mcp
 bash scripts/install-tools.sh                       # macOS
 # OR — on the SANS SIFT Workstation (Ubuntu x86_64):
 bash scripts/install-on-sift.sh
 ```
 
-Either installer bootstraps the [Protocol SIFT](https://github.com/teamdfir/protocol-sift)
-baseline first (Claude Code + five DFIR skill packs + PDF reporter under
-`~/.claude/`), then layers OATH on top. **If you already have Protocol SIFT
-installed**, set `OATH_SKIP_PROTOCOL_SIFT=1` to skip the baseline step:
+**If you already have Protocol SIFT installed**, set
+`OATH_SKIP_PROTOCOL_SIFT=1` to skip the baseline step:
 
 ```bash
 OATH_SKIP_PROTOCOL_SIFT=1 bash scripts/install-on-sift.sh
