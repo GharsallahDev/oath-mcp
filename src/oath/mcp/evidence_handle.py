@@ -35,6 +35,20 @@ from typing import Literal
 MountTech = Literal["losetup", "hdiutil", "fuse-ntfs", "fuse-ext4", "raw-file"]
 
 
+def _run(cmd: list[str], label: str) -> subprocess.CompletedProcess:
+    """Run `cmd`, surfacing stderr on failure so mount diagnostics are visible."""
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        stderr = (proc.stderr or "").strip() or "(no stderr)"
+        stdout = (proc.stdout or "").strip()
+        raise RuntimeError(
+            f"{label} failed (exit {proc.returncode}): {' '.join(cmd)}\n"
+            f"stderr: {stderr}\n"
+            f"stdout: {stdout}"
+        )
+    return proc
+
+
 # --------------------------------------------------------------------------- #
 # Data shape                                                                  #
 # --------------------------------------------------------------------------- #
@@ -113,16 +127,12 @@ def _linux_mount_ewf(image_path: Path, mount_point: Path) -> MountTech:
     """
     ewf_root = Path(f"/tmp/oath-ewf-{uuid.uuid4().hex[:8]}")
     ewf_root.mkdir(parents=True, exist_ok=True)
-    subprocess.run(
-        ["sudo", "ewfmount", str(image_path), str(ewf_root)],
-        check=True, capture_output=True, text=True,
-    )
+    _run(["sudo", "ewfmount", str(image_path), str(ewf_root)], "ewfmount")
     raw_stream = ewf_root / "ewf1"
 
-    mmls = subprocess.run(
-        ["mmls", str(raw_stream)],
-        check=True, capture_output=True, text=True,
-    )
+    # mmls needs sudo too — ewfmount's FUSE export is root-owned by default
+    # on SIFT, so a user-mode mmls gets EACCES.
+    mmls = _run(["sudo", "mmls", str(raw_stream)], "mmls")
     # mmls output rows look like:
     #   003:  000:001   0000206848   0041940991   0041734144   NTFS / exFAT (0x07)
     # We want the partition with the longest length that's NTFS-flavored.
@@ -142,11 +152,11 @@ def _linux_mount_ewf(image_path: Path, mount_point: Path) -> MountTech:
         raise RuntimeError(f"no NTFS partition found via mmls in {image_path}")
 
     offset_bytes = biggest_start * 512  # mmls reports sectors of 512 B
-    subprocess.run(
+    _run(
         ["sudo", "mount", "-o",
          f"ro,loop,offset={offset_bytes},show_sys_files,streams_interface=windows",
          "-t", "ntfs", str(raw_stream), str(mount_point)],
-        check=True, capture_output=True, text=True,
+        "mount-ntfs",
     )
     return "fuse-ntfs"
 
@@ -179,9 +189,9 @@ def mount_readonly(image_path: Path, mount_root: Path) -> tuple[Path, MountTech]
         # Raw image (.dd / .raw / .img): losetup -r ensures the loop device
         # itself is read-only; even a root write through it returns EROFS at
         # the kernel level.
-        result = subprocess.run(
+        result = _run(
             ["sudo", "losetup", "-Pr", "--show", "-f", str(image_path)],
-            check=True, capture_output=True, text=True,
+            "losetup",
         )
         loop_dev = result.stdout.strip()
         # Mount the partition device (first NTFS one we find).
@@ -190,13 +200,13 @@ def mount_readonly(image_path: Path, mount_root: Path) -> tuple[Path, MountTech]
         for part_idx in (2, 1, 3, 4):
             part_dev = f"{loop_dev}p{part_idx}"
             try:
-                subprocess.run(
+                _run(
                     ["sudo", "mount", "-o", "ro,loop,show_sys_files,streams_interface=windows",
                      "-t", "ntfs", part_dev, str(mount_point)],
-                    check=True, capture_output=True, text=True,
+                    f"mount-loop-{part_idx}",
                 )
                 return mount_point, "losetup"
-            except subprocess.CalledProcessError:
+            except RuntimeError:
                 continue
         raise RuntimeError(f"no mountable NTFS partition on {loop_dev}")
 
