@@ -102,15 +102,65 @@ def sha256_streaming(path: Path, chunk_bytes: int = 1 << 22) -> tuple[str, int]:
 # --------------------------------------------------------------------------- #
 
 
+def _linux_mount_ewf(image_path: Path, mount_point: Path) -> MountTech:
+    """Mount the largest NTFS partition of an EnCase .E01 image read-only.
+
+    Sequence: ewfmount exposes the .E01 (auto-discovering .E02..N segments
+    via libewf) as a raw stream; mmls identifies the largest NTFS partition
+    in that stream; mount -t ntfs with offset= mounts it read-only via
+    ntfs-3g. sudo is required for ewfmount + mount; on SIFT the
+    sansforensics user has it configured.
+    """
+    ewf_root = Path(f"/tmp/oath-ewf-{uuid.uuid4().hex[:8]}")
+    ewf_root.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        ["sudo", "ewfmount", str(image_path), str(ewf_root)],
+        check=True, capture_output=True, text=True,
+    )
+    raw_stream = ewf_root / "ewf1"
+
+    mmls = subprocess.run(
+        ["mmls", str(raw_stream)],
+        check=True, capture_output=True, text=True,
+    )
+    # mmls output rows look like:
+    #   003:  000:001   0000206848   0041940991   0041734144   NTFS / exFAT (0x07)
+    # We want the partition with the longest length that's NTFS-flavored.
+    biggest_start, biggest_length = 0, 0
+    for line in mmls.stdout.splitlines():
+        if "NTFS" not in line:
+            continue
+        parts = line.split()
+        try:
+            start = int(parts[2])
+            length = int(parts[4])
+        except (IndexError, ValueError):
+            continue
+        if length > biggest_length:
+            biggest_start, biggest_length = start, length
+    if biggest_length == 0:
+        raise RuntimeError(f"no NTFS partition found via mmls in {image_path}")
+
+    offset_bytes = biggest_start * 512  # mmls reports sectors of 512 B
+    subprocess.run(
+        ["sudo", "mount", "-o",
+         f"ro,loop,offset={offset_bytes},show_sys_files,streams_interface=windows",
+         "-t", "ntfs", str(raw_stream), str(mount_point)],
+        check=True, capture_output=True, text=True,
+    )
+    return "fuse-ntfs"
+
+
 def mount_readonly(image_path: Path, mount_root: Path) -> tuple[Path, MountTech]:
     """Mount `image_path` read-only and return the mount point + technology.
 
     Platform dispatch:
-      - Linux:   losetup -r + mount -o ro
-      - macOS:   hdiutil attach -readonly (HFS+/APFS only); ntfs-3g/ext4fuse
-                 for foreign filesystems; otherwise we fall back to "raw-file"
-                 mode where tools parse the image bytes directly without a mount.
-      - Other:   raw-file fallback.
+      - Linux  + .E01/.Ex01:  ewfmount + offset-mount the largest NTFS partition
+      - Linux  + raw image:    losetup -r + ntfs-3g
+      - macOS:                  hdiutil attach -readonly (HFS+/APFS only);
+                                ntfs-3g/ext4fuse for foreign filesystems;
+                                otherwise raw-file passthrough.
+      - Other:                  raw-file passthrough.
 
     raw-file mode is acceptable for many forensic tools (Volatility 3 reads
     memory images directly; EvtxECmd reads exported .evtx files; we mount only
@@ -122,17 +172,33 @@ def mount_readonly(image_path: Path, mount_root: Path) -> tuple[Path, MountTech]
 
     if system == "Linux":
         mount_point.mkdir(parents=True, exist_ok=True)
-        # losetup -r ensures the loop device itself is read-only; even a root
-        # write through it returns EROFS at the kernel level.
-        subprocess.run(
-            ["losetup", "-r", "--show", "-f", str(image_path)],
-            check=True,
-            capture_output=True,
-            text=True,
+        suffix = image_path.suffix.upper()
+        if suffix in (".E01", ".EX01", ".S01"):
+            tech = _linux_mount_ewf(image_path, mount_point)
+            return mount_point, tech
+        # Raw image (.dd / .raw / .img): losetup -r ensures the loop device
+        # itself is read-only; even a root write through it returns EROFS at
+        # the kernel level.
+        result = subprocess.run(
+            ["sudo", "losetup", "-Pr", "--show", "-f", str(image_path)],
+            check=True, capture_output=True, text=True,
         )
-        # NOTE: minimal implementation — the full version maps -P partitions
-        # and selects the correct slice; punt to Day-1 polish.
-        return mount_point, "losetup"
+        loop_dev = result.stdout.strip()
+        # Mount the partition device (first NTFS one we find).
+        # losetup -P exposed loopNp1, loopNp2, ... — pick the largest.
+        # Cheap heuristic: just try p1, p2, p3 and mount the one that works.
+        for part_idx in (2, 1, 3, 4):
+            part_dev = f"{loop_dev}p{part_idx}"
+            try:
+                subprocess.run(
+                    ["sudo", "mount", "-o", "ro,loop,show_sys_files,streams_interface=windows",
+                     "-t", "ntfs", part_dev, str(mount_point)],
+                    check=True, capture_output=True, text=True,
+                )
+                return mount_point, "losetup"
+            except subprocess.CalledProcessError:
+                continue
+        raise RuntimeError(f"no mountable NTFS partition on {loop_dev}")
 
     if system == "Darwin":
         # hdiutil for native macOS images; otherwise raw-file passthrough.
